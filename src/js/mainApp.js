@@ -28,7 +28,7 @@ var __AppPanel = {
 	},
 	applyEntire:function(){
 		this.selector = "BODY";
-		if (this._useDocPip() && !(this.cfg.mediaClassic && this._hasMedia(document.body))) {
+		if (this._useDocPip()) {
 			this._prepare(document.body);
 			this._openDocPip(document.body);
 			return;
@@ -51,7 +51,7 @@ var __AppPanel = {
 	 * page, so the setting is cached synchronously here (see _initCfg) instead of
 	 * being queried over an async message round-trip while the click is handled.
 	 */
-	cfg: { useDocPip: true, mediaClassic: false },
+	cfg: { useDocPip: true },
 	// Saved window sizes per selector: { selector: {width, height} }
 	_sizes: {},
 	_initCfg: function () {
@@ -100,23 +100,9 @@ var __AppPanel = {
 	_readCfg: function (settings) {
 		// Only override when a value was actually stored; otherwise keep the
 		// default (top-most window) so a fresh profile never falls back silently.
-		if (settings && settings.cfg) {
-			if (typeof settings.cfg.useDocPip !== 'undefined') {
-				this.cfg.useDocPip = !!settings.cfg.useDocPip;
-			}
-			if (typeof settings.cfg.mediaClassic !== 'undefined') {
-				this.cfg.mediaClassic = !!settings.cfg.mediaClassic;
-			}
+		if (settings && settings.cfg && typeof settings.cfg.useDocPip !== 'undefined') {
+			this.cfg.useDocPip = !!settings.cfg.useDocPip;
 		}
-	},
-	// Document PiP re-parents the node into another document, which resets media
-	// players: MSE <video> loses its stream and player <iframe>s reload. Detect them
-	// so such regions can keep using the classic window.
-	_hasMedia: function (node) {
-		if (!node || node.nodeType !== 1) return false;
-		var tag = node.tagName;
-		if (tag === 'VIDEO' || tag === 'IFRAME' || tag === 'OBJECT' || tag === 'EMBED') return true;
-		return !!(node.querySelector && node.querySelector('video,iframe,object,embed'));
 	},
 	_useDocPip: function () {
 		return !!this.cfg.useDocPip && !!window.documentPictureInPicture;
@@ -137,13 +123,6 @@ var __AppPanel = {
 		}
 		this._prepare(target);
 		if (this._useDocPip()) {
-			if (this.cfg.mediaClassic && this._hasMedia(target)) {
-				// Moving a media player into the PiP document kills playback, so keep
-				// the classic window for these regions (video + danmaku keep working).
-				console.info('[SepWin] media region detected -> classic window is used');
-				this._applyClassic(target);
-				return;
-			}
 			this._openDocPip(target);
 			return;
 		}

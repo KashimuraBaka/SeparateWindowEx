@@ -77,15 +77,6 @@
    "popHideAllIconOn": {
       "message": "隐藏图标"
    },
-   "popMediaClassic": {
-      "message": "视频区域用经典窗口"
-   },
-   "popMediaClassicOff": {
-      "message": "视频区域用经典窗口"
-   },
-   "popMediaClassicOn": {
-      "message": "视频区域用经典窗口"
-   },
    "popRestoreCmnt": {
       "message": "恢复方式："
    },

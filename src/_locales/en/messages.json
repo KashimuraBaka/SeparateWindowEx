@@ -77,15 +77,6 @@
    "popHideAllIconOn": {
       "message": "Hide icons"
    },
-   "popMediaClassic": {
-      "message": "Classic window for video"
-   },
-   "popMediaClassicOff": {
-      "message": "Classic window for video"
-   },
-   "popMediaClassicOn": {
-      "message": "Classic window for video"
-   },
    "popRestoreCmnt": {
       "message": "Restore:"
    },

@@ -273,9 +273,6 @@ var Panel = {
 		// Top-most (Document PiP) window is the default; the legacy classic
 		// window is opt-in via the 经典窗口 switch.
 		useDocPip: true,
-		// PiP mirrors video frames via captureStream, so media keeps working there.
-		// Opt in here to force media regions into the classic window instead.
-		mediaClassic: false,
 		modeVersion: 2
 	},
 	load: function (callback) {

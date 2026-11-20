@@ -67,7 +67,6 @@ var PopUp = {
 			// The switch is "经典窗口": checked means the legacy classic window,
 			// unchecked (default) means the top-most Document PiP window.
 			document.getElementById('useDocPip').checked = !cfg.useDocPip;
-			document.getElementById('mediaClassic').checked = cfg.mediaClassic === true;
 			document.getElementById('hideAllIcon').checked = cfg.hideAllIcon;
 			document.getElementById('advSettings').checked = cfg.showAdvSettings;
 			var pos = cfg.position, size = cfg.size;
@@ -119,7 +118,6 @@ var PopUp = {
 			case 'isCopy':
 			case 'focus':
 			case 'useDocPip':
-			case 'mediaClassic':
 			case 'hideAllIcon':
 			case 'width':
 			case 'height':
@@ -245,7 +243,6 @@ var PopUp = {
 			cfg.isCopy = document.getElementById('isCopy').checked;
 			cfg.isFocus = !document.getElementById('focus').checked;
 			cfg.useDocPip = !document.getElementById('useDocPip').checked;
-			cfg.mediaClassic = document.getElementById('mediaClassic').checked;
 			cfg.hideAllIcon = document.getElementById('hideAllIcon').checked;
 			cfg.size.width = document.getElementById('width').value;
 			cfg.size.height = document.getElementById('height').value;
@@ -274,8 +271,6 @@ var PopUp = {
 		var classic = document.getElementById('useDocPip').checked;
 		document.getElementById('wrap-position').style.display = classic ? '' : 'none';
 		document.getElementById('wrap-window-size').style.display = classic ? '' : 'none';
-		// Only meaningful while the top-most (PiP) mode is active.
-		document.getElementById('wrapMediaClassic').style.display = classic ? 'none' : '';
 	},
 	toggleDupCfg: function () {
 		if (document.getElementById('duplicate').checked) {

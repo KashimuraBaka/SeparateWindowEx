@@ -77,15 +77,6 @@
    "popHideAllIconOn": {
       "message": "Не показывать иконки"
    },
-   "popMediaClassic": {
-      "message": "Классическое окно для видео"
-   },
-   "popMediaClassicOff": {
-      "message": "Классическое окно для видео"
-   },
-   "popMediaClassicOn": {
-      "message": "Классическое окно для видео"
-   },
    "popRestoreCmnt": {
       "message": "Восстанавливать:"
    },
