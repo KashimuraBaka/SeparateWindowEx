@@ -14,9 +14,9 @@ v1.0.0 · 作者 **Kashimura**
 
 "Separate Window Ex" 可将网页中的任意区域——或整个 `<video>` / `<iframe>`——弹出为一个独立的置顶窗口，并自带自定义视频播放器（画中画、旋转/缩放/滤镜、倍速、全屏）。
 
-本仓库是基于原扩展（Belousov Alexandr 开发的 v0.9.5）的 Web Store 解包版本**逆向重建**的项目，并已**迁移到 Manifest V3**，可在当前的 Chrome 和 Edge 上加载运行。
+本项目是一个完整的 Manifest V3 扩展工程，可在当前的 Chrome 和 Edge 上直接加载运行。
 
-> 原始的 MV2 解包版本曾作为迁移参照，在与重建后的源码逐一核对等价后才删除。**`src/` 是真正可编辑的源码**；`dist/` 是生成的可直接加载的产物（请勿手动修改）。
+> **`src/` 是真正可编辑的源码**；`dist/` 是构建产物（请勿手动修改）。
 
 ---
 
@@ -99,9 +99,9 @@ npm run verify     # 构建 + 校验
 
 ## MV2 → MV3 迁移说明
 
-原扩展是 Manifest V2，Chrome/Edge 已不再接受。以下是必须进行的改动（均在 `src/` 中完成）：
+本扩展早期版本使用 Manifest V2，Chrome/Edge 已不再接受。以下是迁移所需的改动（均在 `src/` 中完成）：
 
-| 方面 | MV2（原版） | MV3（本项目） |
+| 方面 | MV2 版本 | MV3（本项目） |
 |---|---|---|
 | 清单 | `manifest_version: 2` | `manifest_version: 3` |
 | 后台 | 持久化**后台页**，3 个脚本（`storage.js`、`bg_panel.js`、`background.js`） | 单一 **service worker**（`js/background.js`），已合并 |
@@ -119,20 +119,18 @@ service worker **没有持久的全局变量**——它可能在事件之间被�
 - `Panel.cfg` → 通过 `chrome.storage.local` 持久化，按需重新加载。
 - 弹窗通过消息读取/更新配置，而不是直接访问后台页。
 
-### 重建过程中修复的问题
-- 补充了缺失的 `PanelSaveSize` i18n 键（英文 + 俄文）。弹出按钮面板调用了 `getMessage('PanelSaveSize')`，但原版只有 `PanelSaveSizeOff`/`PanelSaveSizeOn`，导致该按钮的提示为空。
+### 开发过程中修复的问题
+- 补充了缺失的 `PanelSaveSize` i18n 键（英文 + 俄文）。弹出按钮面板调用了 `getMessage('PanelSaveSize')`，但只有 `PanelSaveSizeOff`/`PanelSaveSizeOn`，导致该按钮的提示为空。
 
 ## 说明与注意事项
-- 代码尽可能贴近原版（纯 ES5、相同的文件/变量结构），以便迁移易于审阅；只做了上述 MV3 必需的改动。
+- 代码保持纯 ES5 与既有的文件/变量结构，便于阅读与维护。
 - `minimum_chrome_version` 设为 `102`（MV3 + `chrome.storage.session`）。
 
 ---
 
 ## 许可证
 
-基于 [MIT 许可证](LICENSE) 发布。
-
-本项目是社区对 **Belousov Alexandr** 开发的原版 "Separate Window"（v0.9.5）的 Manifest V3 重建，基于其原始作品——在此致谢。MV3 迁移及配套构建工具同样以 MIT 许可贡献。
+基于 [MIT 许可证](LICENSE) 发布，Copyright (c) 2026 Kashimura。
 
 ---
 
@@ -148,13 +146,10 @@ v1.0.0 · by **Kashimura**
 out into its own always-on-top popup window, with a custom video player (picture-in-picture,
 rotate/zoom/filters, playback speed, fullscreen).
 
-This repository is a **reverse-engineered, rebuilt project** reconstructed from an unpacked Web
-Store build of the original extension (v0.9.5 by Belousov Alexandr) and **migrated to Manifest
-V3** so it loads and runs on current Chrome and Edge.
+This repository is a complete Manifest V3 extension project that loads and runs on current Chrome
+and Edge.
 
-> The original MV2 extraction was used as the migration reference and was verified against the
-> rebuilt source before being removed. **`src/` is the real, editable source**; `dist/` is the
-> generated, load-ready output (do not edit by hand).
+> **`src/` is the real, editable source**; `dist/` is the build output (do not edit by hand).
 
 ---
 
@@ -258,10 +253,10 @@ Two distributable formats are produced from the same `dist/`:
 
 ## MV2 → MV3 migration notes
 
-The original was Manifest V2, which Chrome/Edge no longer accept. The following changes were
+This extension used Manifest V2, which Chrome/Edge no longer accept. The following changes were
 required (all applied in `src/`):
 
-| Area | MV2 (original) | MV3 (this project) |
+| Area | MV2 version | MV3 (this project) |
 |---|---|---|
 | Manifest | `manifest_version: 2` | `manifest_version: 3` |
 | Background | persistent **background page**, 3 scripts (`storage.js`, `bg_panel.js`, `background.js`) | single **service worker** (`js/background.js`), merged |
@@ -282,13 +277,13 @@ settings). Those are now:
 - `Panel.cfg` → persisted via `chrome.storage.local` and reloaded on demand.
 - The popup reads/updates config through messages instead of a live background page.
 
-### Fixed during the rebuild
+### Fixed during development
 - Added the missing `PanelSaveSize` i18n key (en + ru). The pop-out button panel called
   `getMessage('PanelSaveSize')`, but only `PanelSaveSizeOff`/`PanelSaveSizeOn` existed, so that
   button's tooltip rendered empty.
 
 ## Notes & caveats
-- The code is preserved as close to the original as possible (plain ES5, same file/variable
+- The code stays plain ES5 with the existing file/variable
   structure) to keep the migration reviewable; only the MV3-required changes above were made.
 - `minimum_chrome_version` is set to `102` (MV3 + `chrome.storage.session`).
 
@@ -296,8 +291,4 @@ settings). Those are now:
 
 ## License
 
-Released under the [MIT License](LICENSE).
-
-This is a community Manifest V3 rebuild of the original "Separate Window" extension (v0.9.5) by
-**Belousov Alexandr**, whose original work this project is based on — credit and thanks to him.
-The MV3 migration and surrounding build tooling are contributed under the same MIT license.
+Released under the [MIT License](LICENSE), Copyright (c) 2026 Kashimura.

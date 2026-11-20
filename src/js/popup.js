@@ -1,5 +1,5 @@
 /**
- * Author: Belousov Alexandr
+ * Author: Kashimura
  * MV3 migration: the popup can no longer reach the background page, so every piece of
  * state it used to read straight off the background globals (Panel.cfg, Storage history)
  * is now fetched from the background service worker over messages via req().

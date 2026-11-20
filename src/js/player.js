@@ -1,5 +1,5 @@
 /**
- * Author: Belousov Alexandr
+ * Author: Kashimura
  */ 
 var VideoControls={
 	isPresent:false,

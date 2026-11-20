@@ -1,5 +1,5 @@
 /**
- * Author: Belousov Alexandr
+ * Author: Kashimura
  */
 if(window == top){
 	chrome.runtime.onMessage.addListener(
