@@ -38,6 +38,9 @@
    "delete": {
       "message": "Delete"
    },
+   "docPipActivate": {
+      "message": "Click here to open in a top-most window"
+   },
    "error": {
       "message": "Reload this page"
    },
@@ -47,14 +50,14 @@
    "folderBookMarks": {
       "message": "Separate windows"
    },
-   "popAlwaysOnTop": {
-      "message": "Always on top"
+   "popDocPip": {
+      "message": "Window mode"
    },
-   "popAlwaysOnTopOff": {
-      "message": "Always on top"
+   "popDocPipOff": {
+      "message": "Classic window"
    },
-   "popAlwaysOnTopOn": {
-      "message": "Always on top"
+   "popDocPipOn": {
+      "message": "Classic window"
    },
    "popFocus": {
       "message": "Focus"
@@ -73,6 +76,15 @@
    },
    "popHideAllIconOn": {
       "message": "Hide icons"
+   },
+   "popMediaClassic": {
+      "message": "Classic window for video"
+   },
+   "popMediaClassicOff": {
+      "message": "Classic window for video"
+   },
+   "popMediaClassicOn": {
+      "message": "Classic window for video"
    },
    "popRestoreCmnt": {
       "message": "Restore:"
@@ -101,12 +113,6 @@
    "txtAut": {
       "message": "Auto"
    },
-   "txtButtonSettingsOff": {
-      "message": "Settings"
-   },
-   "txtButtonSettingsOn": {
-      "message": "Close"
-   },
    "txtButtonChooseOff": {
       "message": "Select"
    },
@@ -118,6 +124,12 @@
    },
    "txtButtonPopTabOn": {
       "message": "Entire Tab"
+   },
+   "txtButtonSettingsOff": {
+      "message": "Settings"
+   },
+   "txtButtonSettingsOn": {
+      "message": "Close"
    },
    "txtHistory": {
       "message": "Previous choice"

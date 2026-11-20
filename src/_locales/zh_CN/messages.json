@@ -38,6 +38,9 @@
    "delete": {
       "message": "删除"
    },
+   "docPipActivate": {
+      "message": "点击此处进入置顶窗口"
+   },
    "error": {
       "message": "请刷新此页面"
    },
@@ -47,14 +50,14 @@
    "folderBookMarks": {
       "message": "独立窗口"
    },
-   "popAlwaysOnTop": {
-      "message": "窗口置顶"
+   "popDocPip": {
+      "message": "窗口模式"
    },
-   "popAlwaysOnTopOff": {
-      "message": "窗口置顶"
+   "popDocPipOff": {
+      "message": "经典窗口"
    },
-   "popAlwaysOnTopOn": {
-      "message": "窗口置顶"
+   "popDocPipOn": {
+      "message": "经典窗口"
    },
    "popFocus": {
       "message": "焦点"
@@ -73,6 +76,15 @@
    },
    "popHideAllIconOn": {
       "message": "隐藏图标"
+   },
+   "popMediaClassic": {
+      "message": "视频区域用经典窗口"
+   },
+   "popMediaClassicOff": {
+      "message": "视频区域用经典窗口"
+   },
+   "popMediaClassicOn": {
+      "message": "视频区域用经典窗口"
    },
    "popRestoreCmnt": {
       "message": "恢复方式："
@@ -101,12 +113,6 @@
    "txtAut": {
       "message": "自动"
    },
-   "txtButtonSettingsOff": {
-      "message": "高级设置"
-   },
-   "txtButtonSettingsOn": {
-      "message": "收起"
-   },
    "txtButtonChooseOff": {
       "message": "选择区域"
    },
@@ -118,6 +124,12 @@
    },
    "txtButtonPopTabOn": {
       "message": "整个标签页"
+   },
+   "txtButtonSettingsOff": {
+      "message": "高级设置"
+   },
+   "txtButtonSettingsOn": {
+      "message": "收起"
    },
    "txtHistory": {
       "message": "历史选择"

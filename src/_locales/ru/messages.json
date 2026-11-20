@@ -38,6 +38,9 @@
    "delete": {
       "message": "Удалить"
    },
+   "docPipActivate": {
+      "message": "Нажмите здесь, чтобы открыть поверх окон"
+   },
    "error": {
       "message": "Обновите вкладку"
    },
@@ -47,14 +50,14 @@
    "folderBookMarks": {
       "message": "Отдельные окна"
    },
-   "popAlwaysOnTop": {
-      "message": "Поверх окон"
+   "popDocPip": {
+      "message": "Режим окна"
    },
-   "popAlwaysOnTopOff": {
-      "message": "Поверх окон"
+   "popDocPipOff": {
+      "message": "Классическое окно"
    },
-   "popAlwaysOnTopOn": {
-      "message": "Поверх окон"
+   "popDocPipOn": {
+      "message": "Классическое окно"
    },
    "popFocus": {
       "message": "Фокус"
@@ -73,6 +76,15 @@
    },
    "popHideAllIconOn": {
       "message": "Не показывать иконки"
+   },
+   "popMediaClassic": {
+      "message": "Классическое окно для видео"
+   },
+   "popMediaClassicOff": {
+      "message": "Классическое окно для видео"
+   },
+   "popMediaClassicOn": {
+      "message": "Классическое окно для видео"
    },
    "popRestoreCmnt": {
       "message": "Восстанавливать:"
@@ -101,12 +113,6 @@
    "txtAut": {
       "message": "Авто"
    },
-   "txtButtonSettingsOff": {
-      "message": "Настройки"
-   },
-   "txtButtonSettingsOn": {
-      "message": "Свернуть"
-   },
    "txtButtonChooseOff": {
       "message": "Выбрать"
    },
@@ -118,6 +124,12 @@
    },
    "txtButtonPopTabOn": {
       "message": "Всю вкладку"
+   },
+   "txtButtonSettingsOff": {
+      "message": "Настройки"
+   },
+   "txtButtonSettingsOn": {
+      "message": "Свернуть"
    },
    "txtHistory": {
       "message": "Предыдущий выбор"

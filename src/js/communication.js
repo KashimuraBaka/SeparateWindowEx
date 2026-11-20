@@ -127,19 +127,25 @@ var __BgCmd={
 		return __AppPanel.run;
 	},
 	sendCmd:function(cmd,arg,callback){
-		chrome.runtime.sendMessage({cmd:cmd,arg:arg}, 
+		chrome.runtime.sendMessage({cmd:cmd,arg:arg},
 			function (response){
-				if(!response){callback();}
+				if(callback){ callback(response ? response.answer : undefined); }
 			}
-		);	
+		);
 	},
 	isBookmark:function(arg){
 		Bookmarks.isBookmark=arg;
-		ButtonPanel.setBookmark(arg);
+		// In Document PiP mode the page's button panel does not exist (the PiP
+		// window owns its own copy), so guard against missing buttons.
+		if (ButtonPanel && ButtonPanel.btn_bkm && ButtonPanel.btn_bkm.classList) {
+			ButtonPanel.setBookmark(arg);
+		}
 	},
 	isSavedSize:function(arg){
 		Modification.isSavedSize = arg;
-		ButtonPanel.setSavedIcon(arg);
+		if (ButtonPanel && ButtonPanel.btn_save && ButtonPanel.btn_save.classList) {
+			ButtonPanel.setSavedIcon(arg);
+		}
 	},
 	apply:function(arg){
 		__AppPanel.apply(document.querySelector(arg));

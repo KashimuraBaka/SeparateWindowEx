@@ -64,7 +64,10 @@ var PopUp = {
 			document.getElementById('duplicate').checked = cfg.isDuplicate;
 			document.getElementById('isCopy').checked = cfg.isCopy;
 			document.getElementById('focus').checked = !cfg.isFocus;
-			document.getElementById('alwaysOnTop').checked = !!cfg.alwaysOnTop;
+			// The switch is "经典窗口": checked means the legacy classic window,
+			// unchecked (default) means the top-most Document PiP window.
+			document.getElementById('useDocPip').checked = !cfg.useDocPip;
+			document.getElementById('mediaClassic').checked = cfg.mediaClassic === true;
 			document.getElementById('hideAllIcon').checked = cfg.hideAllIcon;
 			document.getElementById('advSettings').checked = cfg.showAdvSettings;
 			var pos = cfg.position, size = cfg.size;
@@ -83,6 +86,7 @@ var PopUp = {
 			}
 			self.toggleAdvSettings();
 			self.toggleDupCfg();
+			self.toggleDocPip();
 		});
 	},
 	_localization: function () {
@@ -114,7 +118,8 @@ var PopUp = {
 				this.toggleDupCfg();
 			case 'isCopy':
 			case 'focus':
-			case 'alwaysOnTop':
+			case 'useDocPip':
+			case 'mediaClassic':
 			case 'hideAllIcon':
 			case 'width':
 			case 'height':
@@ -239,7 +244,8 @@ var PopUp = {
 			cfg.isDuplicate = document.getElementById('duplicate').checked;
 			cfg.isCopy = document.getElementById('isCopy').checked;
 			cfg.isFocus = !document.getElementById('focus').checked;
-			cfg.alwaysOnTop = document.getElementById('alwaysOnTop').checked;
+			cfg.useDocPip = !document.getElementById('useDocPip').checked;
+			cfg.mediaClassic = document.getElementById('mediaClassic').checked;
 			cfg.hideAllIcon = document.getElementById('hideAllIcon').checked;
 			cfg.size.width = document.getElementById('width').value;
 			cfg.size.height = document.getElementById('height').value;
@@ -247,6 +253,7 @@ var PopUp = {
 			cfg.position = pos;
 			return req('saveCfg', cfg);
 		}).then(function () {
+			self.toggleDocPip();
 			if (document.getElementById('hideAllIcon').checked) {
 				sendCommand({ cmd: 'hideAllIcons', arg: {} }, function () { });
 			} else {
@@ -256,10 +263,19 @@ var PopUp = {
 	},
 	toggleAdvSettings: function () {
 		if (document.getElementById('advSettings').checked) {
-			document.getElementById('advCfg').style.maxHeight = '550px';
+			document.getElementById('advCfg').style.maxHeight = '760px';
 		} else {
 			document.getElementById('advCfg').style.maxHeight = '0';
 		}
+	},
+	// Document PiP ignores window position/size, so hide those controls unless the
+	// legacy classic window is selected.
+	toggleDocPip: function () {
+		var classic = document.getElementById('useDocPip').checked;
+		document.getElementById('wrap-position').style.display = classic ? '' : 'none';
+		document.getElementById('wrap-window-size').style.display = classic ? '' : 'none';
+		// Only meaningful while the top-most (PiP) mode is active.
+		document.getElementById('wrapMediaClassic').style.display = classic ? 'none' : '';
 	},
 	toggleDupCfg: function () {
 		if (document.getElementById('duplicate').checked) {

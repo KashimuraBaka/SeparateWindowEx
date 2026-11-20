@@ -266,17 +266,25 @@ var Panel = {
 		isDuplicate: false,
 		isCopy: false,
 		isFocus: true,
-		alwaysOnTop: false,
 		position: { left: 0, top: 0, auto: 1 },
 		size: { width: 'Auto', height: 'Auto' },
 		showAdvSettings: false,
-		hideAllIcon: false
+		hideAllIcon: false,
+		// Top-most (Document PiP) window is the default; the legacy classic
+		// window is opt-in via the 经典窗口 switch.
+		useDocPip: true,
+		// PiP mirrors video frames via captureStream, so media keeps working there.
+		// Opt in here to force media regions into the classic window instead.
+		mediaClassic: false,
+		modeVersion: 2
 	},
 	load: function (callback) {
 		Storage.getSetting(function (itemsObj) {
+			var migrated = false;
 			if (itemsObj && itemsObj.hasOwnProperty('settings')) {
-				Panel.setSettings(itemsObj.settings);
+				migrated = Panel.setSettings(itemsObj.settings);
 			}
+			if (migrated) Panel.saveSetting();
 			if (callback) callback(Panel.cfg);
 		});
 	},
@@ -284,11 +292,21 @@ var Panel = {
 		Storage.saveSetting({ cfg: this.cfg });
 	},
 	setSettings: function (items) {
+		var migrated = false;
 		if (items.hasOwnProperty('cfg')) {
 			for (var item in items.cfg) {
 				if (this.cfg.hasOwnProperty(item)) this.cfg[item] = items.cfg[item];
 			}
+			// Settings written before the window-mode rework carry no modeVersion;
+			// their useDocPip:false was just the old default, so reset it instead of
+			// silently keeping everyone on the legacy classic window.
+			if (items.cfg.modeVersion !== 2) {
+				this.cfg.useDocPip = true;
+				this.cfg.modeVersion = 2;
+				migrated = true;
+			}
 		}
+		return migrated;
 	},
 	_moveTab: function (tabId, winId, index) {
 		chrome.tabs.move(tabId, { windowId: winId, index: index }, function (tab) {
@@ -296,14 +314,9 @@ var Panel = {
 		});
 	},
 	createPop: function (tabId, size, windowSize) {
-		// Capture the source window so focus can be handed back to it after the
-		// always-on-top popup is created (creating with alwaysOnTop requires focus).
-		chrome.windows.getCurrent(function (srcWin) {
-			var srcWinId = srcWin ? srcWin.id : undefined;
-			this.load(function () { Panel._createPop(tabId, size, windowSize, srcWinId); });
-		}.bind(this));
+		this.load(function () { Panel._createPop(tabId, size, windowSize); });
 	},
-	_createPop: function (tabId, size, windowSize, srcWinId) {
+	_createPop: function (tabId, size, windowSize) {
 		chrome.tabs.get(tabId, function (tab) {
 			if (Panel.cfg.isDuplicate) {
 				chrome.windows.getCurrent(function (win) {
@@ -367,16 +380,18 @@ var Panel = {
 						tabId: tabId,
 						width: width,
 						height: height,
-						// Keep the original focus behavior so the window still opens
-						// as a separate window without stealing focus. alwaysOnTop is
-						// set at create time so it sticks reliably.
+						// NOTE: chrome.windows.create does NOT accept an alwaysOnTop
+						// property -- passing it throws "Unexpected property" and the
+						// window is never created. Focus behavior is the original.
 						focused: Panel.cfg.isFocus,
-						alwaysOnTop: !!Panel.cfg.alwaysOnTop,
 						type: 'popup',
 						incognito: window.incognito
 					},
 					function (window) {
 						newTabs.addNewWinId(tabId, window.id);
+						// Keep the popped-out window always on top. windows.create does
+						// not accept alwaysOnTop, so apply it right after creation.
+						chrome.windows.update(window.id, { alwaysOnTop: true });
 						SendMessage(tabId, { cmd: 'modifyURL', arg: false });
 					});
 				}
@@ -523,6 +538,17 @@ var cmdFromTab = {
 			Storage.saveProp(tab.url, index, arg.prop);
 		});
 	},
+	// Document PiP mode has no newTabs entry (no classic window was opened), so the
+	// saved size is keyed by the selector the content script sends.
+	savePipSize: function (arg, tab) {
+		Storage.getAllSelectors(tab.url, function (selectors) {
+			if (!selectors) return;
+			var index = selectors.indexOf(arg.selector);
+			if (index > -1) {
+				Storage.saveProp(tab.url, index, { name: 'size', value: arg.size });
+			}
+		});
+	},
 	printScr: function (arg, tab) {
 		chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' }, function (srcUrl) {
 			SendMessage(tab.id, { cmd: 'saveImage', arg: { data: srcUrl } });
@@ -646,6 +672,11 @@ chrome.runtime.onMessage.addListener(function (request, sender, callback) {
 	if (request.cmd && sender && sender.tab) {
 		// Message from a content script.
 		newTabs.load().then(function () {
+			if (request.cmd === 'getCfg') {
+				// Respond with the config so the content script can pick the mode.
+				Panel.load(function (cfg) { callback({ answer: true, cfg: cfg }); });
+				return;
+			}
 			if (cmdFromTab.hasOwnProperty(request.cmd)) {
 				cmdFromTab[request.cmd](request.arg, sender.tab);
 				callback({ answer: true });
