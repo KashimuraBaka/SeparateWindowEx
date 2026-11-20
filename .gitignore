@@ -14,5 +14,3 @@ Thumbs.db
 
 # Agent plugin working data (not part of the extension)
 .mnemon/
-
-# Do NOT ignore raw/ — it is the reference extraction of the original store build.
