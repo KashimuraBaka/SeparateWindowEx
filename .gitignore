@@ -1,0 +1,18 @@
+# Build output
+/dist/
+/*.zip
+/*.crx
+
+# CRX signing private key — keep secret, back it up, never commit it
+/keys/
+
+# OS / editor noise
+Thumbs.db
+.DS_Store
+.vscode/
+*.log
+
+# Agent plugin working data (not part of the extension)
+.mnemon/
+
+# Do NOT ignore raw/ — it is the reference extraction of the original store build.

@@ -1,0 +1,17 @@
+{
+  "name": "separate-window",
+  "version": "0.9.5",
+  "description": "Derive an arbitrary area of a page in a separate popup window (Chrome/Edge MV3).",
+  "private": true,
+  "license": "MIT",
+  "author": "Belousov Alexandr (original), MV3 migration",
+  "license": "MIT",
+  "scripts": {
+    "build": "node tools/build.js",
+    "validate": "node tools/validate.js",
+    "package": "node tools/build.js && node tools/package.js",
+    "crx": "node tools/build.js && node tools/validate.js && node tools/crx.js",
+    "release": "node tools/build.js && node tools/validate.js && node tools/package.js && node tools/crx.js",
+    "verify": "node tools/build.js && node tools/validate.js"
+  }
+}

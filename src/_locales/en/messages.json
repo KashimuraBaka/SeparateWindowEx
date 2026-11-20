@@ -1,0 +1,119 @@
+{
+   "PanelBack": {
+      "message": "Back to main window"
+   },
+   "PanelBookMarks": {
+      "message": "Add to bookmarks"
+   },
+   "PanelForcePlayerOff": {
+      "message": "Turn off the player"
+   },
+   "PanelForcePlayerOn": {
+      "message": "Turn on the player"
+   },
+   "PanelGetLink": {
+      "message": "Get link"
+   },
+   "PanelLoadIframe": {
+      "message": "Switch to iframe"
+   },
+   "PanelPrintScreen": {
+      "message": "Screenshot"
+   },
+   "PanelSaveSize": {
+      "message": "Save size and position"
+   },
+   "PanelSaveSizeOff": {
+      "message": "Save size and position"
+   },
+   "PanelSaveSizeOn": {
+      "message": "Delete the saved size and position"
+   },
+   "PanelScrollDown": {
+      "message": "Back to previous element"
+   },
+   "PanelScrollUp": {
+      "message": "Up to next element"
+   },
+   "delete": {
+      "message": "Delete"
+   },
+   "error": {
+      "message": "Reload this page"
+   },
+   "extDesc": {
+      "message": "Derive an arbitrary area of a page in a separate popup window"
+   },
+   "folderBookMarks": {
+      "message": "Separate windows"
+   },
+   "popFocusOff": {
+      "message": "Set focus to popup"
+   },
+   "popFocusOn": {
+      "message": "Keep focus"
+   },
+   "popHideAllIconOff": {
+      "message": "Show icons"
+   },
+   "popHideAllIconOn": {
+      "message": "Hide icons"
+   },
+   "popRestoreCmnt": {
+      "message": "Restore:"
+   },
+   "popRestoreOff": {
+      "message": "instead of duplicate"
+   },
+   "popRestoreOn": {
+      "message": "as a new tab"
+   },
+   "popSwitchOff": {
+      "message": "Only popup window"
+   },
+   "popSwitchOn": {
+      "message": "Keep a tab open"
+   },
+   "showIcon": {
+      "message": "Show icon"
+   },
+   "titleIcon": {
+      "message": "Put in a popup"
+   },
+   "txtAut": {
+      "message": "Auto"
+   },
+   "txtButtonChooseOff": {
+      "message": "Select"
+   },
+   "txtButtonChooseOn": {
+      "message": "Cancel"
+   },
+   "txtButtonPopTabOff": {
+      "message": "Entire Tab"
+   },
+   "txtButtonPopTabOn": {
+      "message": "Entire Tab"
+   },
+   "txtHistory": {
+      "message": "Previous choice"
+   },
+   "txtLB": {
+      "message": "at the bottom left corner"
+   },
+   "txtLT": {
+      "message": "at the top left corner"
+   },
+   "txtPosition": {
+      "message": "Window position"
+   },
+   "txtRB": {
+      "message": "at the bottom right corner"
+   },
+   "txtRT": {
+      "message": "at the top right corner"
+   },
+   "txtSize": {
+      "message": "Window size"
+   }
+}

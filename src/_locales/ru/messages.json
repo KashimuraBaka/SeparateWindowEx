@@ -1,0 +1,119 @@
+{
+   "PanelBack": {
+      "message": "Назад на главное окно"
+   },
+   "PanelBookMarks": {
+      "message": "Добавить в закладки"
+   },
+   "PanelForcePlayerOff": {
+      "message": "Выключить плеер"
+   },
+   "PanelForcePlayerOn": {
+      "message": "Включить плеер"
+   },
+   "PanelGetLink": {
+      "message": "Получить ссылку"
+   },
+   "PanelLoadIframe": {
+      "message": "Обработать фрейм"
+   },
+   "PanelPrintScreen": {
+      "message": "Скриншот"
+   },
+   "PanelSaveSize": {
+      "message": "Сохранить размер и позицию окна"
+   },
+   "PanelSaveSizeOff": {
+      "message": "Сохранить размер и позицию окна"
+   },
+   "PanelSaveSizeOn": {
+      "message": "Удалить сохраненные размер и позицию окна"
+   },
+   "PanelScrollDown": {
+      "message": "Назад на предыдующий элемент"
+   },
+   "PanelScrollUp": {
+      "message": "Вверх на следующий элемент"
+   },
+   "delete": {
+      "message": "Удалить"
+   },
+   "error": {
+      "message": "Обновите вкладку"
+   },
+   "extDesc": {
+      "message": "Выделите произвольную область страницы в отдельное всплывающее окно"
+   },
+   "folderBookMarks": {
+      "message": "Отдельные окна"
+   },
+   "popFocusOff": {
+      "message": "Фокус на окне"
+   },
+   "popFocusOn": {
+      "message": "Фокус на вкладке"
+   },
+   "popHideAllIconOff": {
+      "message": "Показывать иконки"
+   },
+   "popHideAllIconOn": {
+      "message": "Не показывать иконки"
+   },
+   "popRestoreCmnt": {
+      "message": "Восстанавливать:"
+   },
+   "popRestoreOff": {
+      "message": "с заменой дубликата"
+   },
+   "popRestoreOn": {
+      "message": "в новую вкладку"
+   },
+   "popSwitchOff": {
+      "message": "Только окно"
+   },
+   "popSwitchOn": {
+      "message": "Окно и вкладка"
+   },
+   "showIcon": {
+      "message": "Показывать иконку"
+   },
+   "titleIcon": {
+      "message": "Выделить в окно"
+   },
+   "txtAut": {
+      "message": "Авто"
+   },
+   "txtButtonChooseOff": {
+      "message": "Выбрать"
+   },
+   "txtButtonChooseOn": {
+      "message": "Отменить"
+   },
+   "txtButtonPopTabOff": {
+      "message": "Всю вкладку"
+   },
+   "txtButtonPopTabOn": {
+      "message": "Всю вкладку"
+   },
+   "txtHistory": {
+      "message": "Предыдущий выбор"
+   },
+   "txtLB": {
+      "message": "В левом нижнем углу"
+   },
+   "txtLT": {
+      "message": "В левом верхнем углу"
+   },
+   "txtPosition": {
+      "message": "Позиция окна"
+   },
+   "txtRB": {
+      "message": "В правом нижнем углу"
+   },
+   "txtRT": {
+      "message": "В правом верхнем углу"
+   },
+   "txtSize": {
+      "message": "Размер окна"
+   }
+}
