@@ -1,5 +1,5 @@
 /**
- * Author: Belousov Alexandr
+ * Author: Kashimura
  */
 var __AppPanel = {
 	lastEv: 0,
@@ -274,6 +274,13 @@ var __AppPanel = {
 			__BgCmd.sendCmd(on ? 'pipKeepAwake' : 'pipReleaseAwake', {});
 		} catch (e) { }
 	},
+	// Tell the page it is still visible while a PiP window exists, otherwise sites
+	// pause their danmaku/overlay renderers as soon as the tab is hidden.
+	_visibilityShim: function (on) {
+		try {
+			__BgCmd.sendCmd('pipVisibilityShim', { on: !!on });
+		} catch (e) { }
+	},
 	_requestWakeLock: function (pipWin) {
 		var self = this;
 		try {
@@ -289,39 +296,59 @@ var __AppPanel = {
 		}
 		this._wakeLock = null;
 	},
+	// Cheap, conservative health loop. It must never fight the normal pipeline: a
+	// captureStream re-creation resets playback and shows up as dropped frames, so a
+	// restart is the last resort after cheaper fixes failed, and it is capped.
 	_startWatchdog: function () {
 		var self = this;
 		this._stopWatchdog();
-		var lastTime = -1, stalls = 0;
-		self._lastFrames = null;
+		this._restarts = 0;
+		this._restartCap = 3;
+		var lastVu = -1, strikes = 0, lastResume = 0;
 		this._watchdog = setInterval(function () {
 			var win = self._pipWin;
 			if (!win || win.closed) { self._stopWatchdog(); return; }
 			var video = self._pipVideo, view = self._pipView;
 			if (!video || !view) return;
-			// 1. Chrome can pause media in a hidden tab — resume it.
+			var now = Date.now();
+			// a) keep the source decoding (Chrome may pause media in a hidden tab)
 			try {
-				if (video.paused && !video.ended) {
+				if (video.paused && !video.ended && now - lastResume > 10000) {
+					lastResume = now;
 					var p = video.play();
 					if (p && p.catch) p.catch(function () { });
 				}
 			} catch (e) { }
-			// 2. Rebuild the mirror stream when frames stop arriving.
-			var frames = 0;
+			// b) keep the mirror playing — a paused mirror is the most common freeze
 			try {
-				frames = view.getVideoPlaybackQuality
-					? view.getVideoPlaybackQuality().totalVideoFrames : 0;
+				if (view.paused && view.srcObject) {
+					var pv = view.play();
+					if (pv && pv.catch) pv.catch(function () { });
+				}
 			} catch (e) { }
-			var t = video.currentTime;
-			if (view.videoWidth === 0 || (frames === self._lastFrames && t === lastTime)) {
-				stalls++;
-				if (stalls >= 3) { stalls = 0; self._restartStream(); }
-			} else {
-				stalls = 0;
+
+			// c) liveness on the mirror itself
+			var vu = view.currentTime;
+			var stalled = view.videoWidth > 0 && vu === lastVu;
+			lastVu = vu;
+
+			if (!stalled) { strikes = 0; return; }
+			strikes++;
+			// First strike: a paused mirror; second: wait one more cycle.
+			if (strikes >= 2 && strikes < 4) {
+				try {
+					var pr = view.play();
+					if (pr && pr.catch) pr.catch(function () { });
+				} catch (e) { }
 			}
-			self._lastFrames = frames;
-			lastTime = t;
-		}, 2000);
+			// Only rebuild once the picture has been frozen for ~9s, and never more
+			// than _restartCap times per PiP session.
+			if (strikes >= 3 && self._restarts < self._restartCap) {
+				self._restarts++;
+				strikes = 0;
+				self._restartStream();
+			}
+		}, 3000);
 	},
 	_stopWatchdog: function () {
 		if (this._watchdog) { clearInterval(this._watchdog); this._watchdog = null; }
@@ -375,6 +402,7 @@ var __AppPanel = {
 
 		// Keep the machine awake and the source tab alive while the PiP window exists.
 		this._keepAwake(true);
+		this._visibilityShim(true);
 		this._requestWakeLock(pipWin);
 		try {
 			pipWin.document.addEventListener('visibilitychange', function () {
@@ -538,12 +566,20 @@ var __AppPanel = {
 		// surrounding page chrome is cropped away instead of leaving black bands.
 		var fit = this._pipHostFit;
 		if (!fit || !fit.w || !fit.h) fit = { x: 0, y: 0, w: size.w, h: size.h };
-		var scale = Math.min(vw / fit.w, vh / fit.h);
+		// Fill the window with the video box instead of letterboxing it: with "contain"
+		// a taller/shorter window left black bands and pushed the danmaku layer into the
+		// middle, which looked misaligned. Cropping the overflow keeps the picture and
+		// its overlay pinned to the top-left of the window.
+		var scale = Math.max(vw / fit.w, vh / fit.h);
 		if (!isFinite(scale) || scale <= 0) scale = 1;
 		var left = Math.round((vw - fit.w * scale) / 2 - fit.x * scale);
 		var top = Math.round((vh - fit.h * scale) / 2 - fit.y * scale);
 		host.style.transformOrigin = 'top left';
 		host.style.transform = 'scale(' + scale + ')';
+		// Promote the scaled region to its own layer: re-rasterising a scaled <video>
+		// every frame is what makes big regions look choppy on weak GPUs.
+		host.style.willChange = 'transform';
+		host.style.backfaceVisibility = 'hidden';
 		host.style.position = 'absolute';
 		host.style.left = left + 'px';
 		host.style.top = top + 'px';
@@ -786,6 +822,7 @@ var __AppPanel = {
 		this._stopWatchdog();
 		this._stopPipStream();
 		this._releaseWakeLock();
+		this._visibilityShim(false);
 		this._keepAwake(false);
 		this._pipVideo = null;
 		this._pipView = null;

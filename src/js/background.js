@@ -1,5 +1,5 @@
 /**
- * Author: Belousov Alexandr
+ * Author: Kashimura
  *
  * "Separate Window" — background service worker.
  *
@@ -503,6 +503,45 @@ var Bookmarks = {
 // tabId -> { discardable } for tabs whose PiP window holds a display wake lock.
 var keepAwakeTabs = {};
 
+// Runs in the page's MAIN world (injected with chrome.scripting.executeScript), so it
+// must be self-contained. While the PiP window is open the page is told it is visible:
+// sites commonly pause their overlay/danmaku renderers on visibilitychange, and the
+// PiP copy would then freeze even though its own window is still on screen.
+function sepWinVisibilityShim(on) {
+	var KEY = '__sepWinVisShim';
+	var st = window[KEY];
+	if (on) {
+		if (st) return 'already';
+		st = window[KEY] = { descs: [], blocks: [] };
+		try {
+			st.descs.push(['hidden', Object.getOwnPropertyDescriptor(Document.prototype, 'hidden')]);
+			st.descs.push(['visibilityState', Object.getOwnPropertyDescriptor(Document.prototype, 'visibilityState')]);
+			Object.defineProperty(Document.prototype, 'hidden', {
+				configurable: true, get: function () { return false; }
+			});
+			Object.defineProperty(Document.prototype, 'visibilityState', {
+				configurable: true, get: function () { return 'visible'; }
+			});
+		} catch (e) { /* keep going: the event block below is the important part */ }
+		var stop = function (e) { e.stopImmediatePropagation(); };
+		['visibilitychange', 'webkitvisibilitychange'].forEach(function (type) {
+			window.addEventListener(type, stop, true);
+			st.blocks.push([type, stop]);
+		});
+		return 'on';
+	}
+	if (!st) return 'off';
+	try {
+		st.blocks.forEach(function (b) { window.removeEventListener(b[0], b[1], true); });
+		st.descs.forEach(function (d) {
+			if (d[1]) Object.defineProperty(Document.prototype, d[0], d[1]);
+			else delete Document.prototype[d[0]];
+		});
+	} catch (e) { }
+	delete window[KEY];
+	return 'off';
+}
+
 var cmdFromTab = {
 	apply: function (arg, tab) {
 		if (newTabs.find(tab.id) == -1) {
@@ -578,6 +617,22 @@ var cmdFromTab = {
 		}
 		if (saved && saved.discardable) {
 			chrome.tabs.update(tab.id, { autoDiscardable: true });
+		}
+	},
+	// Player pages stop their danmaku/overlay rendering on visibilitychange, which
+	// leaves the PiP copy frozen as soon as the tab is hidden or the window is
+	// minimised. Intercepting the event in the page's MAIN world keeps the site
+	// producing while the PiP window is open; it is removed again on close.
+	pipVisibilityShim: function (arg, tab) {
+		try {
+			chrome.scripting.executeScript({
+				target: { tabId: tab.id, allFrames: false },
+				world: 'MAIN',
+				func: sepWinVisibilityShim,
+				args: [!!arg.on]
+			}, function () { void chrome.runtime.lastError; });
+		} catch (e) {
+			console.warn('[SepWin] visibility shim failed:', e);
 		}
 	},
 	fromHistory: function (index, tab) {
