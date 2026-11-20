@@ -296,9 +296,14 @@ var Panel = {
 		});
 	},
 	createPop: function (tabId, size, windowSize) {
-		this.load(function () { Panel._createPop(tabId, size, windowSize); });
+		// Capture the source window so focus can be handed back to it after the
+		// always-on-top popup is created (creating with alwaysOnTop requires focus).
+		chrome.windows.getCurrent(function (srcWin) {
+			var srcWinId = srcWin ? srcWin.id : undefined;
+			this.load(function () { Panel._createPop(tabId, size, windowSize, srcWinId); });
+		}.bind(this));
 	},
-	_createPop: function (tabId, size, windowSize) {
+	_createPop: function (tabId, size, windowSize, srcWinId) {
 		chrome.tabs.get(tabId, function (tab) {
 			if (Panel.cfg.isDuplicate) {
 				chrome.windows.getCurrent(function (win) {
@@ -362,20 +367,21 @@ var Panel = {
 						tabId: tabId,
 						width: width,
 						height: height,
-						// Keep the original focus behavior: the popup must NOT steal
-						// focus from the main window (that's the "separate window"
-						// feel). alwaysOnTop is applied after creation instead,
-						// because forcing focus here would break that.
-						focused: Panel.cfg.isFocus,
+						// alwaysOnTop only sticks when the window is created focused,
+						// so it must be created focused (regardless of the "focus"
+						// setting). Focus is handed back to the source window below
+						// to preserve the separate-window feel.
+						focused: true,
+						alwaysOnTop: !!Panel.cfg.alwaysOnTop,
 						type: 'popup',
 						incognito: window.incognito
 					},
 					function (window) {
 						newTabs.addNewWinId(tabId, window.id);
-						// Apply always-on-top after creation so the window still
-						// opens unfocused (focus behavior above is unchanged).
-						if (Panel.cfg.alwaysOnTop) {
-							chrome.windows.update(window.id, { alwaysOnTop: true });
+						// Hand focus back to the original window so the popup stays
+						// top-most without keeping focus (matches the "focus" setting).
+						if (Panel.cfg.alwaysOnTop && !Panel.cfg.isFocus && srcWinId !== undefined) {
+							chrome.windows.update(srcWinId, { focused: true });
 						}
 						SendMessage(tabId, { cmd: 'modifyURL', arg: false });
 					});
