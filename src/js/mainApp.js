@@ -251,6 +251,9 @@ var __AppPanel = {
 			target: video, parent: video.parentNode, next: video.nextSibling,
 			selector: Selector.getSelector(video), mirrored: true
 		};
+		this._pipVideo = video;
+		this._pipView = view;
+		this._startWatchdog();
 		this._updatePipState();
 	},
 	_stopPipStream: function () {
@@ -259,6 +262,85 @@ var __AppPanel = {
 			this._pipStream.getTracks().forEach(function (t) { t.stop(); });
 		} catch (e) { }
 		this._pipStream = null;
+	},
+	/* --- background-tab resilience ------------------------------------
+	 * A PiP window is pointless if the source page stops decoding when its tab is
+	 * hidden or the browser window is minimised: the mirror freezes. Keep the display
+	 * awake, keep the tab out of the discard list, and run a watchdog that resumes
+	 * playback / rebuilds the stream when frames stop arriving.
+	 */
+	_keepAwake: function (on) {
+		try {
+			__BgCmd.sendCmd(on ? 'pipKeepAwake' : 'pipReleaseAwake', {});
+		} catch (e) { }
+	},
+	_requestWakeLock: function (pipWin) {
+		var self = this;
+		try {
+			if (!pipWin.navigator || !pipWin.navigator.wakeLock) return;
+			pipWin.navigator.wakeLock.request('screen').then(function (lock) {
+				self._wakeLock = lock;
+			}).catch(function () { });
+		} catch (e) { }
+	},
+	_releaseWakeLock: function () {
+		if (this._wakeLock && this._wakeLock.release) {
+			try { this._wakeLock.release(); } catch (e) { }
+		}
+		this._wakeLock = null;
+	},
+	_startWatchdog: function () {
+		var self = this;
+		this._stopWatchdog();
+		var lastTime = -1, stalls = 0;
+		self._lastFrames = null;
+		this._watchdog = setInterval(function () {
+			var win = self._pipWin;
+			if (!win || win.closed) { self._stopWatchdog(); return; }
+			var video = self._pipVideo, view = self._pipView;
+			if (!video || !view) return;
+			// 1. Chrome can pause media in a hidden tab — resume it.
+			try {
+				if (video.paused && !video.ended) {
+					var p = video.play();
+					if (p && p.catch) p.catch(function () { });
+				}
+			} catch (e) { }
+			// 2. Rebuild the mirror stream when frames stop arriving.
+			var frames = 0;
+			try {
+				frames = view.getVideoPlaybackQuality
+					? view.getVideoPlaybackQuality().totalVideoFrames : 0;
+			} catch (e) { }
+			var t = video.currentTime;
+			if (view.videoWidth === 0 || (frames === self._lastFrames && t === lastTime)) {
+				stalls++;
+				if (stalls >= 3) { stalls = 0; self._restartStream(); }
+			} else {
+				stalls = 0;
+			}
+			self._lastFrames = frames;
+			lastTime = t;
+		}, 2000);
+	},
+	_stopWatchdog: function () {
+		if (this._watchdog) { clearInterval(this._watchdog); this._watchdog = null; }
+	},
+	_restartStream: function () {
+		var video = this._pipVideo, view = this._pipView;
+		if (!video || !view) return;
+		try {
+			this._stopPipStream();
+			var s = video.captureStream ? video.captureStream()
+				: (video.mozCaptureStream ? video.mozCaptureStream() : null);
+			if (!s) return;
+			view.srcObject = s;
+			this._pipStream = s;
+			var p = view.play();
+			if (p && p.catch) p.catch(function () { });
+		} catch (e) {
+			console.error('[SepWin] failed to rebuild the PiP stream:', e);
+		}
 	},
 	// Prepare the PiP document once (styles + control panel), then show the node.
 	_mountPip: function (pipWin, target) {
@@ -291,6 +373,17 @@ var __AppPanel = {
 		this._showNode(target);
 		this._addPipPanel(pipWin);
 
+		// Keep the machine awake and the source tab alive while the PiP window exists.
+		this._keepAwake(true);
+		this._requestWakeLock(pipWin);
+		try {
+			pipWin.document.addEventListener('visibilitychange', function () {
+				if (pipWin.document.visibilityState === 'visible' && !self._wakeLock) {
+					self._requestWakeLock(pipWin);
+				}
+			});
+		} catch (e) { }
+
 		pipWin.addEventListener('pagehide', function () {
 			self._stopPipStream();
 			self._restorePip();
@@ -311,6 +404,7 @@ var __AppPanel = {
 		}
 		// Drop whatever is currently shown, then start from an empty wrapper.
 		this._restorePipNode();
+		this._stopWatchdog();
 		this._stopPipStream();
 		while (wrap.firstChild) wrap.removeChild(wrap.firstChild);
 
@@ -429,6 +523,9 @@ var __AppPanel = {
 			var pr = view.play();
 			if (pr && pr.catch) pr.catch(function () { });
 		}
+		this._pipVideo = video;
+		this._pipView = view;
+		this._startWatchdog();
 	},
 	// Scale the shown region so it always fits the PiP window, keeping the aspect
 	// ratio and centring it. Called on open and on every window resize.
@@ -686,7 +783,13 @@ var __AppPanel = {
 	},
 	// Put the moved node back where it came from once the PiP window closes.
 	_restorePip: function () {
+		this._stopWatchdog();
 		this._stopPipStream();
+		this._releaseWakeLock();
+		this._keepAwake(false);
+		this._pipVideo = null;
+		this._pipView = null;
+		this._lastFrames = null;
 		this._restorePipNode();
 		this._pipStack = [];
 		this._pipPanel = null;

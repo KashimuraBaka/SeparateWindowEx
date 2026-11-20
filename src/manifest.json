@@ -26,7 +26,8 @@
       "bookmarks",
       "webNavigation",
       "contextMenus",
-      "scripting"
+      "scripting",
+      "power"
    ],
    "host_permissions": [
       "http://*/*",

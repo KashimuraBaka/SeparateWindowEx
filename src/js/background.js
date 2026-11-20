@@ -500,6 +500,9 @@ var Bookmarks = {
 /* ------------------------------------------------------------------ *
  * Commands coming from content scripts
  * ------------------------------------------------------------------ */
+// tabId -> { discardable } for tabs whose PiP window holds a display wake lock.
+var keepAwakeTabs = {};
+
 var cmdFromTab = {
 	apply: function (arg, tab) {
 		if (newTabs.find(tab.id) == -1) {
@@ -550,6 +553,32 @@ var cmdFromTab = {
 		chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' }, function (srcUrl) {
 			SendMessage(tab.id, { cmd: 'saveImage', arg: { data: srcUrl } });
 		});
+	},
+	// A top-most PiP window is useless if the system sleeps or the source tab is
+	// frozen/discarded while the user works in another window. Keep the display awake
+	// and mark the tab as not auto-discardable while the PiP window is open.
+	pipKeepAwake: function (arg, tab) {
+		try {
+			chrome.power.requestKeepAwake('display');
+			keepAwakeTabs[tab.id] = keepAwakeTabs[tab.id] || { discardable: null };
+			chrome.tabs.get(tab.id, function (t) {
+				if (chrome.runtime.lastError || !t) return;
+				if (!keepAwakeTabs[tab.id]) return;
+				keepAwakeTabs[tab.id].discardable = t.autoDiscardable !== false;
+				if (t.autoDiscardable === false) return;
+				chrome.tabs.update(tab.id, { autoDiscardable: false });
+			});
+		} catch (e) { /* power API unavailable */ }
+	},
+	pipReleaseAwake: function (arg, tab) {
+		var saved = keepAwakeTabs[tab.id];
+		delete keepAwakeTabs[tab.id];
+		if (Object.keys(keepAwakeTabs).length === 0) {
+			try { chrome.power.releaseKeepAwake(); } catch (e) { }
+		}
+		if (saved && saved.discardable) {
+			chrome.tabs.update(tab.id, { autoDiscardable: true });
+		}
 	},
 	fromHistory: function (index, tab) {
 		Storage.getItem(tab.url, index, function (item) {
