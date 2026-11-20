@@ -367,22 +367,16 @@ var Panel = {
 						tabId: tabId,
 						width: width,
 						height: height,
-						// alwaysOnTop only sticks when the window is created focused,
-						// so it must be created focused (regardless of the "focus"
-						// setting). Focus is handed back to the source window below
-						// to preserve the separate-window feel.
-						focused: true,
+						// Keep the original focus behavior so the window still opens
+						// as a separate window without stealing focus. alwaysOnTop is
+						// set at create time so it sticks reliably.
+						focused: Panel.cfg.isFocus,
 						alwaysOnTop: !!Panel.cfg.alwaysOnTop,
 						type: 'popup',
 						incognito: window.incognito
 					},
 					function (window) {
 						newTabs.addNewWinId(tabId, window.id);
-						// Hand focus back to the original window so the popup stays
-						// top-most without keeping focus (matches the "focus" setting).
-						if (Panel.cfg.alwaysOnTop && !Panel.cfg.isFocus && srcWinId !== undefined) {
-							chrome.windows.update(srcWinId, { focused: true });
-						}
 						SendMessage(tabId, { cmd: 'modifyURL', arg: false });
 					});
 				}
