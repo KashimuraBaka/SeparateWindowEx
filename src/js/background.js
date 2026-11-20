@@ -319,7 +319,6 @@ var Panel = {
 								width: window.width,
 								height: window.height,
 								focused: !Panel.cfg.isFocus,
-								alwaysOnTop: !!Panel.cfg.alwaysOnTop,
 								incognito: window.incognito
 							});
 						}
@@ -363,17 +362,18 @@ var Panel = {
 						tabId: tabId,
 						width: width,
 						height: height,
-						// alwaysOnTop is only honored on a focused window at creation
-						// time, so force focus when it is enabled.
-						focused: Panel.cfg.isFocus || !!Panel.cfg.alwaysOnTop,
-						alwaysOnTop: !!Panel.cfg.alwaysOnTop,
+						// Keep the original focus behavior: the popup must NOT steal
+						// focus from the main window (that's the "separate window"
+						// feel). alwaysOnTop is applied after creation instead,
+						// because forcing focus here would break that.
+						focused: Panel.cfg.isFocus,
 						type: 'popup',
 						incognito: window.incognito
 					},
 					function (window) {
 						newTabs.addNewWinId(tabId, window.id);
-						// Re-assert after creation so the flag sticks even if the
-						// create-time value was affected by focus.
+						// Apply always-on-top after creation so the window still
+						// opens unfocused (focus behavior above is unchanged).
 						if (Panel.cfg.alwaysOnTop) {
 							chrome.windows.update(window.id, { alwaysOnTop: true });
 						}
