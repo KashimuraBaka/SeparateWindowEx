@@ -4,7 +4,7 @@
    "short_name": "Sepwin",
    "version": "0.9.5",
    "description": "__MSG_extDesc__",
-   "default_locale": "en",
+   "default_locale": "zh_CN",
    "author": "Belousov Alexandr",
    "minimum_chrome_version": "102",
    "icons": {

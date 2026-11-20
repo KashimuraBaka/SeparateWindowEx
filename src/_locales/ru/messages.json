@@ -47,11 +47,17 @@
    "folderBookMarks": {
       "message": "Отдельные окна"
    },
+   "popFocus": {
+      "message": "Фокус"
+   },
    "popFocusOff": {
       "message": "Фокус на окне"
    },
    "popFocusOn": {
       "message": "Фокус на вкладке"
+   },
+   "popHideAllIcon": {
+      "message": "Иконки"
    },
    "popHideAllIconOff": {
       "message": "Показывать иконки"
@@ -67,6 +73,9 @@
    },
    "popRestoreOn": {
       "message": "в новую вкладку"
+   },
+   "popSwitch": {
+      "message": "Окно"
    },
    "popSwitchOff": {
       "message": "Только окно"

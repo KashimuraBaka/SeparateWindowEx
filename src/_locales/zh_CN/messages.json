@@ -1,0 +1,128 @@
+{
+   "PanelBack": {
+      "message": "返回主窗口"
+   },
+   "PanelBookMarks": {
+      "message": "添加到书签"
+   },
+   "PanelForcePlayerOff": {
+      "message": "关闭播放器"
+   },
+   "PanelForcePlayerOn": {
+      "message": "开启播放器"
+   },
+   "PanelGetLink": {
+      "message": "获取链接"
+   },
+   "PanelLoadIframe": {
+      "message": "切换到内嵌框架"
+   },
+   "PanelPrintScreen": {
+      "message": "截图"
+   },
+   "PanelSaveSize": {
+      "message": "保存尺寸和位置"
+   },
+   "PanelSaveSizeOff": {
+      "message": "保存尺寸和位置"
+   },
+   "PanelSaveSizeOn": {
+      "message": "删除已保存的尺寸和位置"
+   },
+   "PanelScrollDown": {
+      "message": "返回上一个元素"
+   },
+   "PanelScrollUp": {
+      "message": "向上选择父元素"
+   },
+   "delete": {
+      "message": "删除"
+   },
+   "error": {
+      "message": "请刷新此页面"
+   },
+   "extDesc": {
+      "message": "将页面的任意区域提取到独立的弹出窗口中"
+   },
+   "folderBookMarks": {
+      "message": "独立窗口"
+   },
+   "popFocus": {
+      "message": "焦点"
+   },
+   "popFocusOff": {
+      "message": "焦点设到弹窗"
+   },
+   "popFocusOn": {
+      "message": "保持焦点"
+   },
+   "popHideAllIcon": {
+      "message": "图标"
+   },
+   "popHideAllIconOff": {
+      "message": "显示图标"
+   },
+   "popHideAllIconOn": {
+      "message": "隐藏图标"
+   },
+   "popRestoreCmnt": {
+      "message": "恢复方式："
+   },
+   "popRestoreOff": {
+      "message": "替换副本"
+   },
+   "popRestoreOn": {
+      "message": "作为新标签页"
+   },
+   "popSwitch": {
+      "message": "窗口"
+   },
+   "popSwitchOff": {
+      "message": "仅弹出窗口"
+   },
+   "popSwitchOn": {
+      "message": "保留标签页"
+   },
+   "showIcon": {
+      "message": "显示图标"
+   },
+   "titleIcon": {
+      "message": "弹出到独立窗口"
+   },
+   "txtAut": {
+      "message": "自动"
+   },
+   "txtButtonChooseOff": {
+      "message": "选择区域"
+   },
+   "txtButtonChooseOn": {
+      "message": "取消"
+   },
+   "txtButtonPopTabOff": {
+      "message": "整个标签页"
+   },
+   "txtButtonPopTabOn": {
+      "message": "整个标签页"
+   },
+   "txtHistory": {
+      "message": "历史选择"
+   },
+   "txtLB": {
+      "message": "左下角"
+   },
+   "txtLT": {
+      "message": "左上角"
+   },
+   "txtPosition": {
+      "message": "窗口位置"
+   },
+   "txtRB": {
+      "message": "右下角"
+   },
+   "txtRT": {
+      "message": "右上角"
+   },
+   "txtSize": {
+      "message": "窗口大小"
+   }
+}

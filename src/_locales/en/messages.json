@@ -47,11 +47,17 @@
    "folderBookMarks": {
       "message": "Separate windows"
    },
+   "popFocus": {
+      "message": "Focus"
+   },
    "popFocusOff": {
       "message": "Set focus to popup"
    },
    "popFocusOn": {
       "message": "Keep focus"
+   },
+   "popHideAllIcon": {
+      "message": "Icons"
    },
    "popHideAllIconOff": {
       "message": "Show icons"
@@ -67,6 +73,9 @@
    },
    "popRestoreOn": {
       "message": "as a new tab"
+   },
+   "popSwitch": {
+      "message": "Window"
    },
    "popSwitchOff": {
       "message": "Only popup window"
