@@ -500,27 +500,21 @@ var __AppPanel = {
 			console.error('[SepWin] captureStream failed:', e);
 		}
 
-		// Place the mirror exactly where the original sits inside the region.
-		var hr = host.getBoundingClientRect(), vr = video.getBoundingClientRect();
+		// The mirror takes the <video>'s place in the DOM and inherits its classes and
+		// inline styles, so the site's own responsive CSS sizes it exactly like the real
+		// element when the region is resized to the PiP window.
 		this._pipHost = host;
 		// Snapshot the inline styles so closing restores the page exactly.
 		this._pipHostCss = host.getAttribute('style');
-		this._pipHostSize = { w: Math.round(hr.width), h: Math.round(hr.height) };
-		// Fit to the video's box (not the whole container): the container usually
-		// carries empty space and page-fixed chrome, which produced big black bands.
-		this._pipHostFit = {
-			x: vr.left - hr.left, y: vr.top - hr.top,
-			w: Math.max(1, vr.width), h: Math.max(1, vr.height)
-		};
 		if (!host.style.position || host.style.position === 'static') {
 			host.style.position = 'relative';
 		}
-		view.style.cssText = 'position:absolute;pointer-events:none;background:#000;' +
-			'object-fit:contain;' +
-			'left:' + Math.round(vr.left - hr.left + host.scrollLeft) + 'px;' +
-			'top:' + Math.round(vr.top - hr.top + host.scrollTop) + 'px;' +
-			'width:' + Math.round(vr.width) + 'px;' +
-			'height:' + Math.round(vr.height) + 'px;';
+		if (video.className) view.className = video.className;
+		var vStyle = video.getAttribute('style');
+		view.style.cssText = (vStyle ? vStyle.replace(/\s*;?\s*$/, ';') : '') +
+			'pointer-events:none;background:#000;';
+		view.setAttribute('playsinline', '');
+		view.removeAttribute('controls');
 
 		// Remember the video's slot, then park the real element off-screen.
 		this._pipParked = { video: video, parent: video.parentNode, next: video.nextSibling };
@@ -539,11 +533,8 @@ var __AppPanel = {
 			target: host, parent: host.parentNode, next: host.nextSibling,
 			selector: Selector.getSelector(host), mirrored: true
 		};
-		// The region loses its page layout context inside the PiP document, so give it
-		// an explicit box, then scale it to fit the PiP window (and keep fitting on resize).
-		host.style.width = Math.round(hr.width) + 'px';
-		host.style.height = Math.round(hr.height) + 'px';
-		host.style.boxSizing = 'border-box';
+		// The region loses its page layout context inside the PiP document; give it the
+		// PiP window's own box so the site's responsive CSS re-lays it out there.
 		wrap.appendChild(host);
 		this._fitPipHost();
 		// Live MediaStream sources need an explicit play() in some cases.
@@ -555,35 +546,21 @@ var __AppPanel = {
 		this._pipView = view;
 		this._startWatchdog();
 	},
-	// Scale the shown region so it always fits the PiP window, keeping the aspect
-	// ratio and centring it. Called on open and on every window resize.
+	// Give the captured region the PiP window's own width/height (no scaling) so the
+	// page's responsive layout re-flows into the window, exactly like the classic
+	// window does. Called on open and on every window resize.
 	_fitPipHost: function () {
-		var host = this._pipHost, win = this._pipWin, size = this._pipHostSize;
-		if (!host || !win || !size || !size.w || !size.h) return;
+		var host = this._pipHost, win = this._pipWin;
+		if (!host || !win) return;
 		var vw = win.innerWidth || 0, vh = win.innerHeight || 0;
 		if (!vw || !vh) return;
-		// Fit the video's box when there is one, so the picture fills the window and
-		// surrounding page chrome is cropped away instead of leaving black bands.
-		var fit = this._pipHostFit;
-		if (!fit || !fit.w || !fit.h) fit = { x: 0, y: 0, w: size.w, h: size.h };
-		// Fill the window with the video box instead of letterboxing it: with "contain"
-		// a taller/shorter window left black bands and pushed the danmaku layer into the
-		// middle, which looked misaligned. Cropping the overflow keeps the picture and
-		// its overlay pinned to the top-left of the window.
-		var scale = Math.max(vw / fit.w, vh / fit.h);
-		if (!isFinite(scale) || scale <= 0) scale = 1;
-		var left = Math.round((vw - fit.w * scale) / 2 - fit.x * scale);
-		var top = Math.round((vh - fit.h * scale) / 2 - fit.y * scale);
-		host.style.transformOrigin = 'top left';
-		host.style.transform = 'scale(' + scale + ')';
-		// Promote the scaled region to its own layer: re-rasterising a scaled <video>
-		// every frame is what makes big regions look choppy on weak GPUs.
-		host.style.willChange = 'transform';
-		host.style.backfaceVisibility = 'hidden';
 		host.style.position = 'absolute';
-		host.style.left = left + 'px';
-		host.style.top = top + 'px';
+		host.style.left = '0';
+		host.style.top = '0';
 		host.style.margin = '0';
+		host.style.width = vw + 'px';
+		host.style.height = vh + 'px';
+		host.style.boxSizing = 'border-box';
 	},
 	// A moved region loses all page styling unless the stylesheets come along.
 	_copyPageStyles: function () {
