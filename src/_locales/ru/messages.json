@@ -47,6 +47,15 @@
    "folderBookMarks": {
       "message": "Отдельные окна"
    },
+   "popAlwaysOnTop": {
+      "message": "Поверх окон"
+   },
+   "popAlwaysOnTopOff": {
+      "message": "Поверх окон"
+   },
+   "popAlwaysOnTopOn": {
+      "message": "Поверх окон"
+   },
    "popFocus": {
       "message": "Фокус"
    },

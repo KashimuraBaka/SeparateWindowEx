@@ -47,6 +47,15 @@
    "folderBookMarks": {
       "message": "独立窗口"
    },
+   "popAlwaysOnTop": {
+      "message": "窗口置顶"
+   },
+   "popAlwaysOnTopOff": {
+      "message": "窗口置顶"
+   },
+   "popAlwaysOnTopOn": {
+      "message": "窗口置顶"
+   },
    "popFocus": {
       "message": "焦点"
    },

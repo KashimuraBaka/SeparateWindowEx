@@ -47,6 +47,15 @@
    "folderBookMarks": {
       "message": "Separate windows"
    },
+   "popAlwaysOnTop": {
+      "message": "Always on top"
+   },
+   "popAlwaysOnTopOff": {
+      "message": "Always on top"
+   },
+   "popAlwaysOnTopOn": {
+      "message": "Always on top"
+   },
    "popFocus": {
       "message": "Focus"
    },

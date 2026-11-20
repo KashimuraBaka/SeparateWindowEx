@@ -266,6 +266,7 @@ var Panel = {
 		isDuplicate: false,
 		isCopy: false,
 		isFocus: true,
+		alwaysOnTop: false,
 		position: { left: 0, top: 0, auto: 1 },
 		size: { width: 'Auto', height: 'Auto' },
 		showAdvSettings: false,
@@ -318,6 +319,7 @@ var Panel = {
 								width: window.width,
 								height: window.height,
 								focused: !Panel.cfg.isFocus,
+								alwaysOnTop: !!Panel.cfg.alwaysOnTop,
 								incognito: window.incognito
 							});
 						}
@@ -361,12 +363,20 @@ var Panel = {
 						tabId: tabId,
 						width: width,
 						height: height,
-						focused: Panel.cfg.isFocus,
+						// alwaysOnTop is only honored on a focused window at creation
+						// time, so force focus when it is enabled.
+						focused: Panel.cfg.isFocus || !!Panel.cfg.alwaysOnTop,
+						alwaysOnTop: !!Panel.cfg.alwaysOnTop,
 						type: 'popup',
 						incognito: window.incognito
 					},
 					function (window) {
 						newTabs.addNewWinId(tabId, window.id);
+						// Re-assert after creation so the flag sticks even if the
+						// create-time value was affected by focus.
+						if (Panel.cfg.alwaysOnTop) {
+							chrome.windows.update(window.id, { alwaysOnTop: true });
+						}
 						SendMessage(tabId, { cmd: 'modifyURL', arg: false });
 					});
 				}

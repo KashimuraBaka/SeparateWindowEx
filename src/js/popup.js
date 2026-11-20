@@ -64,6 +64,7 @@ var PopUp = {
 			document.getElementById('duplicate').checked = cfg.isDuplicate;
 			document.getElementById('isCopy').checked = cfg.isCopy;
 			document.getElementById('focus').checked = !cfg.isFocus;
+			document.getElementById('alwaysOnTop').checked = !!cfg.alwaysOnTop;
 			document.getElementById('hideAllIcon').checked = cfg.hideAllIcon;
 			document.getElementById('advSettings').checked = cfg.showAdvSettings;
 			var pos = cfg.position, size = cfg.size;
@@ -113,6 +114,7 @@ var PopUp = {
 				this.toggleDupCfg();
 			case 'isCopy':
 			case 'focus':
+			case 'alwaysOnTop':
 			case 'hideAllIcon':
 			case 'width':
 			case 'height':
@@ -237,6 +239,7 @@ var PopUp = {
 			cfg.isDuplicate = document.getElementById('duplicate').checked;
 			cfg.isCopy = document.getElementById('isCopy').checked;
 			cfg.isFocus = !document.getElementById('focus').checked;
+			cfg.alwaysOnTop = document.getElementById('alwaysOnTop').checked;
 			cfg.hideAllIcon = document.getElementById('hideAllIcon').checked;
 			cfg.size.width = document.getElementById('width').value;
 			cfg.size.height = document.getElementById('height').value;
