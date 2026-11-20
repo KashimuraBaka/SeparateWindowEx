@@ -43,6 +43,7 @@ tools/
   validate.js        MV3 合规 + 完整性检查（见下）
   package.js         将 dist/ 打包为 zip 用于商店上传
   crx.js             将 dist/ 签名为 CRX3 包
+  install-edge.js    构建并启动 Edge 自动加载扩展（开发预览）
 package.json         npm 脚本
 ```
 
@@ -75,8 +76,11 @@ npm run verify     # 构建 + 校验
 - 通过 `getMessage()` / `__MSG_` 引用的每个 i18n 键都存在于默认语言中
 
 ### 在 Chrome/Edge 中加载
+- **一键构建并自动安装（推荐）：** `npm run install:edge`。它会构建 `dist/`，然后用 `--load-extension` 启动 Edge 并自动加载该扩展（独立开发者配置文件，无需手动拖拽或签名）。也可传一个网址一并打开：`node tools/install-edge.js https://example.com`。
 - **未打包（开发）：** `npm run build`，然后打开 `chrome://extensions`（或 `edge://extensions`），开启**开发者模式**，点击**加载已解压的扩展程序** → 选择 `dist/` 目录。
 - **打包（`.crx`）：** `npm run crx`，然后将生成的 `.crx` 拖入 `chrome://extensions`（或通过企业扩展安装策略部署）。
+
+> `install:edge` 是**开发/预览安装**（相当于开发者模式），每次启动都从 `dist/` 重新加载。由于 Chrome/Edge 137 起 `--load-extension` 在默认配置文件上会被忽略，脚本使用独立的 `--user-data-dir`。重新运行前请先关闭该配置文件的所有窗口，否则只会新开窗口而不会重新加载扩展。
 
 ---
 
@@ -175,6 +179,7 @@ tools/
   validate.js        MV3 compliance + integrity checks (see below)
   package.js         Zip dist/ for store upload
   crx.js             Sign dist/ into a CRX3 package
+  install-edge.js    Build and launch Edge with the extension auto-loaded (dev preview)
 package.json         npm scripts
 ```
 
@@ -213,10 +218,16 @@ Two distributable formats are produced from the same `dist/`:
 - every i18n key referenced via `getMessage()` / `__MSG_` exists in the default locale
 
 ### Load it in Chrome/Edge
+- **One-command build + auto-install (recommended):** `npm run install:edge`. It builds `dist/`, then launches Edge with the extension loaded via `--load-extension` (an isolated dev profile — no manual dragging or signing). Pass a URL to open it too: `node tools/install-edge.js https://example.com`.
 - **Unpacked (development):** `npm run build`, then open `chrome://extensions` (or
   `edge://extensions`), enable **Developer mode**, and **Load unpacked** → select the `dist/` folder.
 - **Packed (`.crx`):** `npm run crx`, then drag the generated `.crx` onto `chrome://extensions`
   (or deploy it via enterprise extension-install policy).
+
+> `install:edge` is a **development/preview install** (the "Developer mode" equivalent); it reloads
+> fresh from `dist/` on every launch. Since Chrome/Edge 137 ignores `--load-extension` on the default
+> profile, the script uses a dedicated `--user-data-dir`. Close all windows of that profile before
+> re-running, or Edge just opens a new window without reloading the extension.
 
 ---
 

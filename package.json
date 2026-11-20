@@ -11,6 +11,7 @@
     "validate": "node tools/validate.js",
     "package": "node tools/build.js && node tools/package.js",
     "crx": "node tools/build.js && node tools/validate.js && node tools/crx.js",
+    "install:edge": "node tools/install-edge.js",
     "release": "node tools/build.js && node tools/validate.js && node tools/package.js && node tools/crx.js",
     "verify": "node tools/build.js && node tools/validate.js"
   }
