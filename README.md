@@ -1,14 +1,18 @@
 <div align="right">
 
-**[中文](#separate-window-chromeedge-扩展manifest-v3) · [English](#separate-window-chromeedge-extension-manifest-v3)**
+**[中文](#zh) · [English](#en)**
 
 </div>
 
 ---
 
-# Separate Window（Chrome/Edge 扩展，Manifest V3）
+<a id="zh"></a>
 
-"Separate Window" 可将网页中的任意区域——或整个 `<video>` / `<iframe>`——弹出为一个独立的置顶窗口，并自带自定义视频播放器（画中画、旋转/缩放/滤镜、倍速、全屏）。
+# Separate Window Ex（Chrome/Edge 扩展，Manifest V3）
+
+v1.0.0 · 作者 **Kashimura**
+
+"Separate Window Ex" 可将网页中的任意区域——或整个 `<video>` / `<iframe>`——弹出为一个独立的置顶窗口，并自带自定义视频播放器（画中画、旋转/缩放/滤镜、倍速、全屏）。
 
 本仓库是基于原扩展（Belousov Alexandr 开发的 v0.9.5）的 Web Store 解包版本**逆向重建**的项目，并已**迁移到 Manifest V3**，可在当前的 Chrome 和 Edge 上加载运行。
 
@@ -134,11 +138,13 @@ service worker **没有持久的全局变量**——它可能在事件之间被�
 
 ---
 
-# Separate Window (Chrome/Edge extension, Manifest V3)
+<a id="en"></a>
 
-<a id="separate-window-chromeedge-extension-manifest-v3"></a>
+# Separate Window Ex (Chrome/Edge extension, Manifest V3)
 
-"Separate Window" pops an arbitrary area of a web page — or a whole `<video>` / `<iframe>` —
+v1.0.0 · by **Kashimura**
+
+"Separate Window Ex" pops an arbitrary area of a web page — or a whole `<video>` / `<iframe>` —
 out into its own always-on-top popup window, with a custom video player (picture-in-picture,
 rotate/zoom/filters, playback speed, fullscreen).
 

@@ -98,27 +98,42 @@ function cdpEval(wsUrl, expression) {
   });
 }
 
-// Opens a CDP session, enables Runtime and returns the isolated world id used by
-// this extension's content script (named "Separate Window").
+// Opens a CDP session, enables Runtime and returns the isolated world created by
+// this extension's content script. The world is named after the extension, so it
+// changes whenever the extension is renamed — probe for our globals instead.
 function contentScriptContext(wsUrl) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(wsUrl);
     const ctxs = [];
+    const pending = new Map();
     let id = 0;
-    const timer = setTimeout(() => { try { ws.close(); } catch (e) {} resolve(null); }, 8000);
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ id: ++id, method: 'Runtime.enable' }));
-      setTimeout(() => {
-        clearTimeout(timer);
-        try { ws.close(); } catch (e) {}
-        const hit = ctxs.find(c => c.name === 'Separate Window');
-        resolve(hit ? hit.id : null);
-      }, 900);
-    };
-    ws.onerror = e => { clearTimeout(timer); reject(new Error('websocket error')); };
+    const call = (method, params) => new Promise(res => {
+      const myId = ++id;
+      pending.set(myId, res);
+      ws.send(JSON.stringify({ id: myId, method, params: params || {} }));
+    });
+    const done = value => { clearTimeout(timer); try { ws.close(); } catch (e) { } resolve(value); };
+    const timer = setTimeout(() => done(null), 12000);
+
+    ws.onerror = () => { clearTimeout(timer); reject(new Error('websocket error')); };
     ws.onmessage = ev => {
       const m = JSON.parse(ev.data);
       if (m.method === 'Runtime.executionContextCreated') ctxs.push(m.params.context);
+      if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); }
+    };
+    ws.onopen = async () => {
+      await call('Runtime.enable');
+      await new Promise(r => setTimeout(r, 900));
+      // Pick the context that actually holds the content-script globals.
+      for (const ctx of ctxs) {
+        const r = await call('Runtime.evaluate', {
+          expression: 'typeof __AppPanel',
+          contextId: ctx.id, returnByValue: true,
+        });
+        const value = r.result && r.result.result ? r.result.result.value : undefined;
+        if (value === 'object') return done(ctx.id);
+      }
+      done(null);
     };
   });
 }

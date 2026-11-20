@@ -1,11 +1,11 @@
 {
    "manifest_version": 3,
-   "name": "Separate Window",
-   "short_name": "Sepwin",
-   "version": "0.9.5",
+   "name": "Separate Window Ex",
+   "short_name": "SepWin",
+   "version": "1.0.0",
    "description": "__MSG_extDesc__",
    "default_locale": "zh_CN",
-   "author": "Belousov Alexandr",
+   "author": "Kashimura",
    "minimum_chrome_version": "102",
    "icons": {
       "16": "img/icon16.png",
