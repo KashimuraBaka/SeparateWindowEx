@@ -92,6 +92,12 @@
    "txtAut": {
       "message": "Авто"
    },
+   "txtButtonSettingsOff": {
+      "message": "Настройки"
+   },
+   "txtButtonSettingsOn": {
+      "message": "Свернуть"
+   },
    "txtButtonChooseOff": {
       "message": "Выбрать"
    },

@@ -92,6 +92,12 @@
    "txtAut": {
       "message": "自动"
    },
+   "txtButtonSettingsOff": {
+      "message": "高级设置"
+   },
+   "txtButtonSettingsOn": {
+      "message": "收起"
+   },
    "txtButtonChooseOff": {
       "message": "选择区域"
    },

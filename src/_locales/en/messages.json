@@ -92,6 +92,12 @@
    "txtAut": {
       "message": "Auto"
    },
+   "txtButtonSettingsOff": {
+      "message": "Settings"
+   },
+   "txtButtonSettingsOn": {
+      "message": "Close"
+   },
    "txtButtonChooseOff": {
       "message": "Select"
    },
