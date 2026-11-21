@@ -1,26 +1,29 @@
+// @ts-nocheck -- 遗留文件体：模块边界已就位，类型迁移留到后续步骤。
+import { createSiteStore } from '../../core/storage';
+import { dispatch, sendToTab } from '../../core/messages';
 /**
- * Author: Kashimura
+ * 作者：Kashimura
  *
- * "Separate Window" — background service worker.
+ * "Separate Window" —— 后台 service worker。
  *
- * MV2 -> MV3 migration notes (this file replaces the old background page made up of
- * storage.js + bg_panel.js + background.js, which MV3 collapses into a single
- * service_worker script):
- *   - No DOM and no persistent global state: the worker can be suspended at any time.
- *     The in-memory state the MV2 background page kept in globals (newTabs, Panel.cfg) is
- *     therefore mirrored into chrome.storage.local / .session and re-hydrated before use.
- *   - The popup can no longer reach a background page, so it talks to this worker over
- *     messages (see popupCmd below).
- *   - Programmatic injection now goes through chrome.scripting.executeScript (needs the
- *     "scripting" permission plus host permissions).
- *   - Toolbar button APIs moved from browserAction to chrome.action.
+ * MV2 → MV3 迁移说明（本文件替代旧后台页的组合：
+ * storage.js + bg_panel.js + background.js，MV3 把它合并成单个
+ * service_worker 脚本）：
+ *   - 没有 DOM，也没有持久的全局状态：worker 随时可能被挂起。
+ *     因此 MV2 后台页存在全局变量里的内存状态（newTabs、Panel.cfg），
+ *     现在镜像到 chrome.storage.local / .session，用之前再读回来。
+ *   - 弹窗无法再直接访问后台页，改为通过消息与本 worker 通信
+ *     （见下面的 popupCmd）。
+ *   - 程序化注入改走 chrome.scripting.executeScript（需要
+ *     "scripting" 权限以及主机权限）。
+ *   - 工具栏按钮 API 从 browserAction 改为 chrome.action。
  */
 
 /* ------------------------------------------------------------------ *
- * Persisted state helpers
+ * 持久化状态辅助函数
  * ------------------------------------------------------------------ */
 
-// Per-tab popup state that used to live in a background-page global.
+// 每个标签页的弹窗状态，过去放在后台页的全局变量里。
 var newTabs = {
 	tabId: [],
 	css: [],
@@ -86,7 +89,7 @@ var newTabs = {
 		let index = this.updateTab.indexOf(tabId);
 		if (index > -1) this.updateTab.splice(index, 1);
 	},
-	/* chrome.storage.session is cleared when the browser closes, which matches the
+	/* chrome.storage.session 在浏览器关闭时清空，这个生命周期和
 	   lifetime this state had as a background-page global in MV2. */
 	save: function () {
 		var snapshot = {
@@ -113,154 +116,10 @@ var newTabs = {
 	}
 };
 
-// Stored settings (survive browser restarts).
-var Storage = {
-	prop: ['css', 'name', 'icon', 'size'],
-	_local: chrome.storage.local,
-	_setItems: function (url, items) {
-		if (items.css.length == 0) {
-			this._local.remove(url);
-		} else {
-			var itemsObj = {};
-			itemsObj[url] = items;
-			this._local.set(itemsObj);
-		}
-	},
-	saveSetting: function (settings) {
-		this._local.set({ settings: settings });
-	},
-	getSetting: function (callback) {
-		this._local.get('settings', function (itemsObj) {
-			callback(itemsObj ? itemsObj : undefined);
-		});
-	},
-	delItem: function (url, index, callback) {
-		var URL = this.normUrl(url);
-		this.getItems(url, function (items) {
-			Storage.prop.forEach(function (element) {
-				if (items.hasOwnProperty(element)) {
-					items[element].splice(index, 1);
-				}
-			});
-			Storage._setItems(URL, items);
-			callback();
-		});
-	},
-	getItem: function (url, index, callback) {
-		this.getItems(url, function (items) {
-			callback({
-				selector: items.css[index],
-				name: items.name[index]
-			});
-		});
-	},
-	checkItems: function (URL, itemsObj) {
-		var items = itemsObj[URL];
-		if (!items.hasOwnProperty('icon')) {
-			items['icon'] = [];
-			for (var i = 0; i < items.css.length; i++) {
-				items.icon.push(true);
-			}
-			Storage._setItems(URL, items);
-		}
-		return items;
-	},
-	getShowItems: function (url, callback) {
-		this.getItems(url, function (items) {
-			var showSelector = [];
-			if (items) {
-				for (var i = 0; i < items.icon.length; i++) {
-					if (items.icon[i]) {
-						showSelector.push(items.css[i]);
-					}
-				}
-			}
-			if (showSelector.length == 0) showSelector = undefined;
-			callback(showSelector);
-		});
-	},
-	getSize: function (url, selector, callback) {
-		this.getItems(url, function (items) {
-			let winSize = undefined;
-			if (items) {
-				let index = items.css.indexOf(selector);
-				if (index > -1 && items.hasOwnProperty('size')) {
-					if (items.size[index] && items.size[index] != '{}') {
-						winSize = items.size[index];
-					}
-				}
-			}
-			callback(winSize);
-		});
-	},
-	getAllSelectors: function (url, callback) {
-		this.getItems(url, function (items) {
-			var selectors = undefined;
-			if (items && items.hasOwnProperty('css')) {
-				selectors = items.css;
-			}
-			callback(selectors);
-		});
-	},
-	getItems: function (url, callback) {
-		var URL = this.normUrl(url);
-		this._local.get(URL, function (itemsObj) {
-			if (itemsObj && itemsObj.hasOwnProperty(URL)) {
-				callback(Storage.checkItems(URL, itemsObj));
-			} else {
-				callback(undefined);
-			}
-		});
-	},
-	saveProp: function (url, index, prop) {
-		var URL = this.normUrl(url);
-		this.getItems(url, function (items) {
-			if (!items.hasOwnProperty(prop.name)) {
-				items[prop.name] = [];
-			}
-			items[prop.name][index] = prop.value;
-			Storage._setItems(URL, items);
-		});
-	},
-	addItem: function (url, selector, name) {
-		if (selector == 'BODY') return;
-		var URL = this.normUrl(url);
-		this._local.get(URL, function (itemObj) {
-			var items = { css: [], name: [], icon: [], size: [] };
-			if (itemObj && itemObj.hasOwnProperty(URL)) {
-				items = itemObj[URL];
-				if (items.css.indexOf(selector) !== -1) return;
-				if (items.css.length < 3) {
-					items.css.push(selector);
-					items.name.push(name);
-					items.icon.push(true);
-					items.size.push("{}");
-				} else {
-					items.css.splice(0, 1);
-					items.name.splice(0, 1);
-					items.icon.splice(0, 1);
-					items.size.splice(0, 1);
-					items.css.push(selector);
-					items.name.push(name);
-					items.icon.push(true);
-					items.size.push("{}");
-				}
-			} else {
-				items.css.push(selector);
-				items.name.push(name);
-				items.icon.push(true);
-				items.size.push("{}");
-			}
-			Storage._setItems(URL, items);
-		});
-	},
-	normUrl: function (url) {
-		var reg = /^(https?:\/\/)?([\da-z|0-9\.-]+)\.([a-z|0-9\.]{2,6})/ig;
-		return url.match(new RegExp(reg));
-	}
-};
-
-// Popup / window configuration (persisted so the worker can reload it after a suspend).
+// 持久化设置（浏览器重启后仍在）。
+// 站点记录存储，与弹窗、内容脚本共用（core/storage）。
+var Storage = createSiteStore(chrome.storage.local);
+// 弹窗 / 窗口配置（持久化，以便 worker 被挂起后重新加载）。
 var Panel = {
 	cfg: {
 		isDuplicate: false,
@@ -270,8 +129,8 @@ var Panel = {
 		size: { width: 'Auto', height: 'Auto' },
 		showAdvSettings: false,
 		hideAllIcon: false,
-		// Top-most (Document PiP) window is the default; the legacy classic
-		// window is opt-in via the 经典窗口 switch.
+		// 默认使用置顶窗口（Document PiP）；旧的经典窗口
+		// 需要用户通过「经典窗口」开关主动启用。
 		useDocPip: true,
 		modeVersion: 2
 	},
@@ -294,9 +153,9 @@ var Panel = {
 			for (var item in items.cfg) {
 				if (this.cfg.hasOwnProperty(item)) this.cfg[item] = items.cfg[item];
 			}
-			// Settings written before the window-mode rework carry no modeVersion;
-			// their useDocPip:false was just the old default, so reset it instead of
-			// silently keeping everyone on the legacy classic window.
+			// 窗口模式改版之前写下的设置没有 modeVersion；
+			// 那时的 useDocPip:false 只是旧的默认值，这里重置它，
+			// 而不是让所有人默默停留在旧的经典窗口上。
 			if (items.cfg.modeVersion !== 2) {
 				this.cfg.useDocPip = true;
 				this.cfg.modeVersion = 2;
@@ -377,17 +236,17 @@ var Panel = {
 						tabId: tabId,
 						width: width,
 						height: height,
-						// NOTE: chrome.windows.create does NOT accept an alwaysOnTop
-						// property -- passing it throws "Unexpected property" and the
-						// window is never created. Focus behavior is the original.
+						// 注意：chrome.windows.create 不接受 alwaysOnTop 属性，
+						// 传了会抛 "Unexpected property"，窗口根本创建不出来。
+						// 焦点行为保持原样。
 						focused: Panel.cfg.isFocus,
 						type: 'popup',
 						incognito: window.incognito
 					},
 					function (window) {
 						newTabs.addNewWinId(tabId, window.id);
-						// Keep the popped-out window always on top. windows.create does
-						// not accept alwaysOnTop, so apply it right after creation.
+						// 让弹出的窗口始终置顶。windows.create 不
+						// 接受 alwaysOnTop，所以创建后立刻设置。
 						chrome.windows.update(window.id, { alwaysOnTop: true });
 						SendMessage(tabId, { cmd: 'modifyURL', arg: false });
 					});
@@ -454,7 +313,7 @@ var Panel = {
 	}
 };
 
-// Bookmarks integration.
+// 书签集成。
 var Bookmarks = {
 	bookmark: { title: '', url: '', parentId: '' },
 	anchor: '#sepwin=',
@@ -498,15 +357,15 @@ var Bookmarks = {
 };
 
 /* ------------------------------------------------------------------ *
- * Commands coming from content scripts
+ * 来自内容脚本的命令
  * ------------------------------------------------------------------ */
-// tabId -> { discardable } for tabs whose PiP window holds a display wake lock.
+// tabId -> { discardable }：记录哪些标签页的 PiP 窗口持有屏幕唤醒锁。
 var keepAwakeTabs = {};
 
-// Runs in the page's MAIN world (injected with chrome.scripting.executeScript), so it
-// must be self-contained. While the PiP window is open the page is told it is visible:
-// sites commonly pause their overlay/danmaku renderers on visibilitychange, and the
-// PiP copy would then freeze even though its own window is still on screen.
+// 在页面主世界运行（由 chrome.scripting.executeScript 注入），因此
+// 必须自包含。PiP 窗口打开期间告诉页面"你可见"：
+// 站点常在 visibilitychange 时暂停弹幕/覆盖层渲染，否则 PiP 里的副本
+// 会僵住，尽管它自己的窗口还显示在屏幕上。
 function sepWinVisibilityShim(on) {
 	var KEY = '__sepWinVisShim';
 	var st = window[KEY];
@@ -542,6 +401,55 @@ function sepWinVisibilityShim(on) {
 	return 'off';
 }
 
+// 在页面主世界运行。播放器页面是按"页面视口"计算覆盖层尺寸（含弹幕字号）的，
+// 而 PiP 模式下页面视口并不改变，副本就会沿用旧字号。
+// 因此 PiP 打开期间把 PiP 窗口尺寸当作视口上报，
+// 并派发 resize，让站点按这个尺寸重新计算。
+function sepWinViewportShim(on, w, h) {
+	var KEY = '__sepWinViewportShim';
+	var st = window[KEY];
+	if (on) {
+		if (!st) {
+			st = window[KEY] = { descs: [], w: w || window.innerWidth, h: h || window.innerHeight };
+			var save = function (obj, prop) {
+				st.descs.push([obj, prop, Object.getOwnPropertyDescriptor(obj, prop)]);
+			};
+			var override = function (obj, prop, dim) {
+				save(obj, prop);
+				try {
+					Object.defineProperty(obj, prop, {
+						configurable: true,
+						get: function () { return dim === 'w' ? st.w : st.h; }
+					});
+				} catch (e) { }
+			};
+			override(window, 'innerWidth', 'w');
+			override(window, 'innerHeight', 'h');
+			override(window, 'outerWidth', 'w');
+			override(window, 'outerHeight', 'h');
+			var de = document.documentElement;
+			if (de) {
+				override(de, 'clientWidth', 'w');
+				override(de, 'clientHeight', 'h');
+			}
+		}
+		if (w) st.w = w;
+		if (h) st.h = h;
+		try { window.dispatchEvent(new Event('resize')); } catch (e) { }
+		return 'on ' + st.w + 'x' + st.h;
+	}
+	if (!st) return 'off';
+	try {
+		st.descs.forEach(function (d) {
+			if (d[2]) Object.defineProperty(d[0], d[1], d[2]);
+			else delete d[0][d[1]];
+		});
+	} catch (e) { }
+	delete window[KEY];
+	try { window.dispatchEvent(new Event('resize')); } catch (e) { }
+	return 'off';
+}
+
 var cmdFromTab = {
 	apply: function (arg, tab) {
 		if (newTabs.find(tab.id) == -1) {
@@ -549,7 +457,6 @@ var cmdFromTab = {
 			Storage.getSize(tab.url, arg.selector, function (size) {
 				var winSize = size ? JSON.parse(size) : null;
 				Panel.createPop(tab.id, arg.size, winSize);
-				Storage.addItem(tab.url, arg.selector, '');
 			});
 		}
 	},
@@ -577,8 +484,8 @@ var cmdFromTab = {
 			Storage.saveProp(tab.url, index, arg.prop);
 		});
 	},
-	// Document PiP mode has no newTabs entry (no classic window was opened), so the
-	// saved size is keyed by the selector the content script sends.
+	// Document PiP 模式没有 newTabs 记录（没有打开经典窗口），
+	// 所以保存的尺寸以内容脚本发来的选择器为键。
 	savePipSize: function (arg, tab) {
 		Storage.getAllSelectors(tab.url, function (selectors) {
 			if (!selectors) return;
@@ -593,9 +500,16 @@ var cmdFromTab = {
 			SendMessage(tab.id, { cmd: 'saveImage', arg: { data: srcUrl } });
 		});
 	},
-	// A top-most PiP window is useless if the system sleeps or the source tab is
-	// frozen/discarded while the user works in another window. Keep the display awake
-	// and mark the tab as not auto-discardable while the PiP window is open.
+	// 记录选中区域的唯一入口，与窗口模式无关：
+	// 内容脚本每次选中只发一次，经典窗口和 PiP 窗口
+	// 因此共用同一份站点区域列表。
+	recordArea: function (arg, tab) {
+		if (!arg || !arg.selector) return;
+		Storage.addItem(tab.url, arg.selector, '');
+	},
+	// 如果系统休眠、或源标签页在用户切到别的窗口时被冻结/丢弃，
+	// 置顶窗口就没意义了。因此保持屏幕唤醒，
+	// 并在 PiP 窗口打开期间把该标签页标记为不自动丢弃。
 	pipKeepAwake: function (arg, tab) {
 		try {
 			chrome.power.requestKeepAwake('display');
@@ -619,10 +533,10 @@ var cmdFromTab = {
 			chrome.tabs.update(tab.id, { autoDiscardable: true });
 		}
 	},
-	// Player pages stop their danmaku/overlay rendering on visibilitychange, which
-	// leaves the PiP copy frozen as soon as the tab is hidden or the window is
-	// minimised. Intercepting the event in the page's MAIN world keeps the site
-	// producing while the PiP window is open; it is removed again on close.
+	// 播放器页面会在 visibilitychange 时停止弹幕/覆盖层渲染，
+	// 导致标签页隐藏或窗口最小化后 PiP 副本立即僵住。
+	// 在页面主世界拦截该事件，可以让站点在 PiP 打开期间继续出弹幕，
+	// 关闭时再解除。
 	pipVisibilityShim: function (arg, tab) {
 		try {
 			chrome.scripting.executeScript({
@@ -633,6 +547,20 @@ var cmdFromTab = {
 			}, function () { void chrome.runtime.lastError; });
 		} catch (e) {
 			console.warn('[SepWin] visibility shim failed:', e);
+		}
+	},
+	// 把 PiP 窗口尺寸作为页面视口上报，让视口驱动的尺寸计算（弹幕
+	// 字号、覆盖层缩放）跟随 PiP 窗口而不是原页面。
+	pipViewportShim: function (arg, tab) {
+		try {
+			chrome.scripting.executeScript({
+				target: { tabId: tab.id, allFrames: false },
+				world: 'MAIN',
+				func: sepWinViewportShim,
+				args: [!!arg.on, arg.w | 0, arg.h | 0]
+			}, function () { void chrome.runtime.lastError; });
+		} catch (e) {
+			console.warn('[SepWin] viewport shim failed:', e);
 		}
 	},
 	fromHistory: function (index, tab) {
@@ -680,7 +608,7 @@ var cmdFromTab = {
 			SendMessage(tab.id, { cmd: 'isSavedSize', arg: !!size });
 		});
 	},
-	// MV3: programmatic injection uses chrome.scripting.
+	// MV3：程序化注入使用 chrome.scripting。
 	loadPlayer: function (arg, tab) {
 		chrome.webNavigation.getAllFrames({ tabId: tab.id }, function (frames) {
 			for (var i = 0; i < frames.length; i++) {
@@ -715,7 +643,7 @@ var cmdFromTab = {
 };
 
 /* ------------------------------------------------------------------ *
- * Commands coming from the popup (MV3: no background page to reach into)
+ * 来自弹窗的命令（MV3 没有可直接访问的后台页）
  * ------------------------------------------------------------------ */
 var popupCmd = {
 	getCfg: function (arg, callback) {
@@ -746,15 +674,15 @@ var popupCmd = {
 };
 
 /* ------------------------------------------------------------------ *
- * Wiring
+ * 事件接线
  * ------------------------------------------------------------------ */
 chrome.runtime.onMessage.addListener(function (request, sender, callback) {
 	if (!request) return false;
 	if (request.cmd && sender && sender.tab) {
-		// Message from a content script.
+		// 来自内容脚本的消息。
 		newTabs.load().then(function () {
 			if (request.cmd === 'getCfg') {
-				// Respond with the config so the content script can pick the mode.
+				// 回传配置，让内容脚本据此选择窗口模式。
 				Panel.load(function (cfg) { callback({ answer: true, cfg: cfg }); });
 				return;
 			}
@@ -769,7 +697,7 @@ chrome.runtime.onMessage.addListener(function (request, sender, callback) {
 		return true; // keep the channel open for the async response
 	}
 	if (request.req) {
-		// Message from the popup.
+		// 来自弹窗的消息。
 		newTabs.load().then(function () {
 			if (popupCmd.hasOwnProperty(request.req)) {
 				popupCmd[request.req](request.arg, callback);
@@ -782,10 +710,8 @@ chrome.runtime.onMessage.addListener(function (request, sender, callback) {
 	return false;
 });
 
-function SendMessage(tabId, command) {
-	chrome.tabs.sendMessage(tabId, command, function (response) {
-		void chrome.runtime.lastError; // ignore tabs with no content script yet
-	});
+function SendMessage(tabId, message) {
+	sendToTab(tabId, message.cmd, message.arg);
 }
 
 function CheckURL() {
@@ -875,6 +801,6 @@ chrome.contextMenus.removeAll(function () {
 	});
 });
 
-// Warm the persisted state when the worker starts.
+// worker 启动时预热持久化状态。
 newTabs.load();
 Panel.load();

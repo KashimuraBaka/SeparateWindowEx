@@ -1,5 +1,6 @@
+// @ts-nocheck -- 遗留代码正在逐文件迁移，先保证运行行为不变。
 /**
- * Author: Kashimura
+ * 作者：Kashimura
  * MV3 migration: the popup can no longer reach the background page, so every piece of
  * state it used to read straight off the background globals (Panel.cfg, Storage history)
  * is now fetched from the background service worker over messages via req().
@@ -269,8 +270,8 @@ var PopUp = {
 	// legacy classic window is selected.
 	toggleDocPip: function () {
 		var classic = document.getElementById('useDocPip').checked;
-		document.getElementById('wrap-position').style.display = classic ? '' : 'none';
-		document.getElementById('wrap-window-size').style.display = classic ? '' : 'none';
+		document.querySelector('.wrap-position').style.display = classic ? '' : 'none';
+		document.querySelector('.wrap-window-size').style.display = classic ? '' : 'none';
 	},
 	toggleDupCfg: function () {
 		if (document.getElementById('duplicate').checked) {
@@ -288,3 +289,5 @@ var PopUp = {
 };
 
 window.onload = function () { PopUp.init(); };
+
+

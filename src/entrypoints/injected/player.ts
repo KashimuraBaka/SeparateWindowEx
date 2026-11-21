@@ -1,5 +1,7 @@
+// @ts-nocheck -- 遗留文件体，这里只处理模块边界。
+import { CssControl, Observer, Selector } from '../content/common';
 /**
- * Author: Kashimura
+ * 作者：Kashimura
  */ 
 var VideoControls={
 	isPresent:false,
@@ -507,12 +509,12 @@ var VideoControls={
 		if(this.filters.page2){
 			document.querySelector('#filters._sepwin_filters #filter1').style.display='none';
 			document.querySelector('#filters._sepwin_filters #filter2').style.display='block';
-			this.filters.filter2.style.backgroundImage='url("chrome-extension://'+chrome.runtime.id+'/img/brightness.png")';
+			this.filters.filter2.style.backgroundImage='url("chrome-extension://'+chrome.runtime.id+'/img/brightness.svg")';
 			this.previewUpdate();
 		}else{
 			document.querySelector('#filters._sepwin_filters #filter1').style.display='block';
 			document.querySelector('#filters._sepwin_filters #filter2').style.display='none';
-			this.filters.filter2.style.backgroundImage='url("chrome-extension://'+chrome.runtime.id+'/img/position.png")';
+			this.filters.filter2.style.backgroundImage='url("chrome-extension://'+chrome.runtime.id+'/img/position.svg")';
 		}
 	},
 	hide:function(){
@@ -938,3 +940,6 @@ VideoControls.resetFilters=VideoControls.resetFilters.bind(VideoControls);
 VideoControls.showPage2=VideoControls.showPage2.bind(VideoControls);
 VideoControls.enterInPIP=VideoControls.enterInPIP.bind(VideoControls);
 VideoControls.leavePIP=VideoControls.leavePIP.bind(VideoControls);
+// 页面世界的内容脚本按全局名查找 VideoControls（frame 里则由 iframe.js 提供）。
+(window as any).VideoControls = VideoControls;
+

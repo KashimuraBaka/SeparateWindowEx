@@ -1,5 +1,9 @@
+// @ts-nocheck -- 遗留文件体：模块边界已就位，类型迁移留到后续步骤。
+import { register, use } from './runtime';
+
+
 /**
- * Author: Kashimura
+ * 作者：Kashimura
  */
 var __AppPanel = {
 	lastEv: 0,
@@ -8,23 +12,23 @@ var __AppPanel = {
 	target: {},
 	selector: '',
 	_getFromPoint: function (x, y) {
-		__Element.hideWrapper();
+		use('__Element').hideWrapper();
 		var target = document.elementFromPoint(x, y);
-		__Element.showWrapper();
+		use('__Element').showWrapper();
 		return target;
 	},
 	_prepare: function (target) {
-		Selector.href = document.location.href;
-		this.selector = Selector.getSelector(target);
+		use('Selector').href = document.location.href;
+		this.selector = use('Selector').getSelector(target);
 		this.stop();
 		this.dellIcon();
-		__Element.switchOff();
-		SepWinEvents.addEvents();
+		use('__Element').switchOff();
+		use('SepWinEvents').addEvents();
 	},
 	updateTab: function () {
 		this._prepare(document.body);
-		Modification.do(document.body, this.selector);
-		ButtonPanel.add();
+		use('Modification').do(document.body, this.selector);
+		use('ButtonPanel').add();
 	},
 	applyEntire:function(){
 		this.selector = "BODY";
@@ -33,7 +37,7 @@ var __AppPanel = {
 			this._openDocPip(document.body);
 			return;
 		}
-		__BgCmd.sendCmd('apply', {
+		use('__BgCmd').sendCmd('apply', {
 			selector: "BODY",
 			size: {
 				width: 		window.innerWidth,
@@ -46,19 +50,19 @@ var __AppPanel = {
 			}
 		});
 	},
-	/* --- mode selection ---
-	 * Document PiP's requestWindow() REQUIRES transient user activation inside the
-	 * page, so the setting is cached synchronously here (see _initCfg) instead of
-	 * being queried over an async message round-trip while the click is handled.
+	/* --- 模式选择 ---
+	 * Document PiP 的 requestWindow() 必须由页面内的用户手势触发，
+	 * 因此配置在这里同步缓存（见 _initCfg），而不是在点击处理过程中
+	 * 再走一次异步消息往返去查询。
 	 */
 	cfg: { useDocPip: true },
-	// Saved window sizes per selector: { selector: {width, height} }
+	// 按选择器保存的窗口尺寸：{ selector: {width, height} }
 	_sizes: {},
 	_initCfg: function () {
 		var self = this;
-		// Authoritative value from the background (this also triggers the settings
-		// migration for profiles saved by older builds). Content scripts have no
-		// access to Panel.cfg, so this is the only source of the real default.
+		// 以后台返回的值为准（这同时会触发旧版本设置项的迁移）。
+		// 内容脚本访问不到 Panel.cfg，
+		// 所以这是真实默认值的唯一来源。
 		try {
 			chrome.runtime.sendMessage({ cmd: 'getCfg', arg: {} }, function (response) {
 				void chrome.runtime.lastError;
@@ -67,7 +71,7 @@ var __AppPanel = {
 				}
 			});
 		} catch (e) { /* ignore */ }
-		// Keep in sync with writes coming from the popup.
+		// 与弹窗写入的值保持同步。
 		if (chrome.storage && chrome.storage.local) {
 			chrome.storage.local.get('settings', function (d) {
 				self._readCfg(d && d.settings);
@@ -80,8 +84,8 @@ var __AppPanel = {
 			this._initSizes();
 		}
 	},
-	// Load the saved per-selector window sizes for this page so the PiP window can
-	// reopen at the size the user saved (mirrors the classic window behaviour).
+	// 载入本页按选择器保存的窗口尺寸，让 PiP 窗口能按
+	// 用户保存的尺寸重新打开（与经典窗口行为一致）。
 	_initSizes: function () {
 		var self = this;
 		var reg = /^(https?:\/\/)?([\da-z|0-9\.-]+)\.([a-z|0-9\.]{2,6})/ig;
@@ -98,8 +102,8 @@ var __AppPanel = {
 		});
 	},
 	_readCfg: function (settings) {
-		// Only override when a value was actually stored; otherwise keep the
-		// default (top-most window) so a fresh profile never falls back silently.
+		// 只有确实存过值时才覆盖；否则保留
+		// 默认值（置顶窗口），避免全新配置默默回退。
 		if (settings && settings.cfg && typeof settings.cfg.useDocPip !== 'undefined') {
 			this.cfg.useDocPip = !!settings.cfg.useDocPip;
 		}
@@ -116,19 +120,27 @@ var __AppPanel = {
 	},
 	apply: function (target) {
 		if (target.tagName == 'IFRAME') {
-			__BgCmd.sendCmd('loadToFrame', {});
+			use('__BgCmd').sendCmd('loadToFrame', {});
 			setTimeout(function () {
-				CmdToFrame.searchInFrame(target);
+				use('CmdToFrame').searchInFrame(target);
 			}, 500);
 		}
 		this._prepare(target);
+		// 在这里记录一次选区，让经典窗口与 PiP 窗口共用
+		// 同一份站点区域列表（不再按模式分开记）。
+		if (this.selector && this.selector !== 'BODY') {
+			try {
+				use('__BgCmd').sendCmd('recordArea', { selector: this.selector });
+				this.responseSelectors();
+			} catch (e) { }
+		}
 		if (this._useDocPip()) {
 			this._openDocPip(target);
 			return;
 		}
 		this._applyClassic(target);
 	},
-	// Classic separate-window path (original behavior).
+	// 经典独立窗口路径（原有行为）。
 	_applyClassic: function (target) {
 		let width = 150, height = 150, entireTab = false;
 		if (target == document.body) {
@@ -136,10 +148,10 @@ var __AppPanel = {
 			height = window.innerHeight;
 			entireTab = true;
 		} else {
-			width = Math.round(__Element.size.width);
-			height = Math.round(__Element.size.height);
+			width = Math.round(use('__Element').size.width);
+			height = Math.round(use('__Element').size.height);
 		}
-		__BgCmd.sendCmd('apply', {
+		use('__BgCmd').sendCmd('apply', {
 			selector: this.selector,
 			size: {
 				width: width,
@@ -151,35 +163,38 @@ var __AppPanel = {
 				entireTab: entireTab
 			}
 		});
-		Modification.do(target, this.selector);
-		ButtonPanel.add();
+		use('Modification').do(target, this.selector);
+		use('ButtonPanel').add();
 	},
-	// Open a Document Picture-in-Picture window (always on top) and move the
-	// selected region into it. The PiP window's own document is destroyed on
-	// close, so the moved node is put back where it came from in pagehide.
+	// 打开一个 Document Picture-in-Picture 窗口（始终置顶），把选中的
+	// 区域移进去。PiP 窗口关闭时其 document 会销毁，
+	// 因此在 pagehide 里把移走的节点放回原处。
 	_openDocPip: function (target) {
 		var self = this;
 		if (!window.documentPictureInPicture) {
 			this._applyClassic(target);
 			return;
 		}
-		// Popup / context-menu triggers carry no gesture inside the page, and the
-		// browser rejects requestWindow() without one. Ask for a single click.
+		// 弹窗/右键菜单触发时页面内没有用户手势，
+		// 浏览器会拒绝 requestWindow()，所以提示用户点一下。
 		if (!this._hasActivation()) {
 			this._promptActivate(target);
 			return;
 		}
 		var isBody = (target == document.body);
 		var width = isBody ? Math.min(window.innerWidth, 1280)
-			: Math.max(160, Math.round(__Element.size.width));
+			: Math.max(160, Math.round(use('__Element').size.width));
 		var height = isBody ? Math.min(window.innerHeight, 800)
-			: Math.max(160, Math.round(__Element.size.height));
-		// Reuse the size saved for this selector, if any.
+			: Math.max(160, Math.round(use('__Element').size.height));
+		// 如果这个选择器存过尺寸，就复用。
 		var saved = this._sizes[this.selector];
 		if (saved && saved.width > 80 && saved.height > 80) {
 			width = Math.round(saved.width);
 			height = Math.round(saved.height);
 		}
+		// 记住请求时的尺寸：requestWindow() 刚返回时 PiP 窗口还没有布局，
+		// innerWidth/innerHeight 会是 0。
+		this._pipRequested = { w: width, h: height };
 		window.documentPictureInPicture.requestWindow({ width: width, height: height })
 			.then(function (pipWin) { self._mountPip(pipWin, target); })
 			.catch(function (e) {
@@ -187,16 +202,16 @@ var __AppPanel = {
 				self._applyClassic(target);
 			});
 	},
-	// First playable <video> inside the chosen region (or the region itself).
+	// 选中区域内第一个可播放的 <video>（或区域自身）。
 	_findVideo: function (node) {
 		if (!node || node.nodeType !== 1) return null;
 		if (node.tagName === 'VIDEO') return node;
 		return node.querySelector ? node.querySelector('video') : null;
 	},
-	// Players usually put overlays (danmaku layer, controls) above the <video>, so the
-	// clicked node often has no video of its own. Walk up a few levels to find the
-	// container that owns the video. Never return <body>/<html>: moving those into the
-	// PiP document would destroy the page.
+	// 播放器通常把弹幕层、控制条叠在 <video> 之上，所以点到的节点
+	// 往往自己不含 video。向上找几层，定位真正持有 video 的容器。
+	// 绝不能返回 <body>/<html>：把它们移动进
+	// PiP 文档会毁掉整个页面。
 	_findVideoContext: function (node) {
 		var n = node, depth = 0;
 		while (n && n.nodeType === 1 && n !== document.body && n !== document.documentElement && depth < 6) {
@@ -207,9 +222,9 @@ var __AppPanel = {
 		}
 		return null;
 	},
-	// Fallback for player pages where the clicked overlay is not inside the video's
-	// subtree: pick the biggest video on the page (live pages often carry more than
-	// one <video> — previews/ads — so "exactly one" is not a usable condition).
+	// 兜底：点击的覆盖层不在 video 子树内时，取页面上最大的 video
+	// （直播页常有预览/广告等多个 video，
+	// 所以"只有一个 video"不能作为条件）。
 	_pickPageVideo: function () {
 		var best = null, bestArea = 0;
 		var vids = document.querySelectorAll('video');
@@ -220,7 +235,7 @@ var __AppPanel = {
 		}
 		return bestArea > 5000 ? best : null;
 	},
-	// Show only the live video mirror (no DOM is moved).
+	// 只显示视频镜像，不移动任何 DOM。
 	_showMirrorOnly: function (video) {
 		var doc = this._pipWin.document;
 		var wrap = doc.getElementById('__sepWinPipWrap');
@@ -249,7 +264,7 @@ var __AppPanel = {
 		}
 		this._pip = {
 			target: video, parent: video.parentNode, next: video.nextSibling,
-			selector: Selector.getSelector(video), mirrored: true
+			selector: use('Selector').getSelector(video), mirrored: true
 		};
 		this._pipVideo = video;
 		this._pipView = view;
@@ -263,22 +278,45 @@ var __AppPanel = {
 		} catch (e) { }
 		this._pipStream = null;
 	},
-	/* --- background-tab resilience ------------------------------------
-	 * A PiP window is pointless if the source page stops decoding when its tab is
-	 * hidden or the browser window is minimised: the mirror freezes. Keep the display
-	 * awake, keep the tab out of the discard list, and run a watchdog that resumes
+	// 把播放器容器移出页面后，站点会发现自己的 <video> 不在了，
+	// 于是在被移走的容器里重建一个。这个新播放器有自己
+	// （不可用的）MediaSource，并把占位画面糊满整个区域。
+	// 因此只保留我们的镜像可见。
+	_suppressForeignVideos: function () {
+		var win = this._pipWin;
+		if (!win || win.closed) return;
+		var doc = win.document;
+		var vids = doc.querySelectorAll('video');
+		for (var i = 0; i < vids.length; i++) {
+			var v = vids[i];
+			if (v.id === '__sepWinPipVideo') continue;
+			if (v.style.display !== 'none') v.style.display = 'none';
+		}
+	},
+	/* --- 后台标签页下的存活能力 --------------------------------
+	 * 如果源页面在标签页隐藏或窗口最小化时停止解码，PiP 窗口就废了：
+	 * 镜像会僵住。所以要保持屏幕唤醒、让标签页不被丢弃，
+	 * 并运行一个看门狗：画面停了就恢复播放，
 	 * playback / rebuilds the stream when frames stop arriving.
 	 */
 	_keepAwake: function (on) {
 		try {
-			__BgCmd.sendCmd(on ? 'pipKeepAwake' : 'pipReleaseAwake', {});
+			use('__BgCmd').sendCmd(on ? 'pipKeepAwake' : 'pipReleaseAwake', {});
 		} catch (e) { }
 	},
-	// Tell the page it is still visible while a PiP window exists, otherwise sites
-	// pause their danmaku/overlay renderers as soon as the tab is hidden.
+	// PiP 期间告诉页面"你仍可见"，否则站点在标签页隐藏后
+	// 会立刻暂停弹幕/覆盖层渲染。
 	_visibilityShim: function (on) {
 		try {
-			__BgCmd.sendCmd('pipVisibilityShim', { on: !!on });
+			use('__BgCmd').sendCmd('pipVisibilityShim', { on: !!on });
+		} catch (e) { }
+	},
+	// 播放器页面按页面视口计算覆盖层尺寸（含弹幕字号）。
+	// PiP 打开期间把 PiP 窗口当作页面视口，
+	// 让这些尺寸与经典窗口一样跟随窗口变化。
+	_viewportShim: function (on, w, h) {
+		try {
+			use('__BgCmd').sendCmd('pipViewportShim', { on: !!on, w: w | 0, h: h | 0 });
 		} catch (e) { }
 	},
 	_requestWakeLock: function (pipWin) {
@@ -296,9 +334,9 @@ var __AppPanel = {
 		}
 		this._wakeLock = null;
 	},
-	// Cheap, conservative health loop. It must never fight the normal pipeline: a
-	// captureStream re-creation resets playback and shows up as dropped frames, so a
-	// restart is the last resort after cheaper fixes failed, and it is capped.
+	// 轻量、保守的健康检查循环，绝不干扰正常管线：
+	// 重建 captureStream 会重置播放并表现为掉帧，
+	// 所以重启是廉价修复都失败后的最后手段，且有次数上限。
 	_startWatchdog: function () {
 		var self = this;
 		this._stopWatchdog();
@@ -311,7 +349,8 @@ var __AppPanel = {
 			var video = self._pipVideo, view = self._pipView;
 			if (!video || !view) return;
 			var now = Date.now();
-			// a) keep the source decoding (Chrome may pause media in a hidden tab)
+			self._suppressForeignVideos();
+			// a) 保持源视频解码（Chrome 可能暂停隐藏标签页的媒体）
 			try {
 				if (video.paused && !video.ended && now - lastResume > 10000) {
 					lastResume = now;
@@ -319,7 +358,7 @@ var __AppPanel = {
 					if (p && p.catch) p.catch(function () { });
 				}
 			} catch (e) { }
-			// b) keep the mirror playing — a paused mirror is the most common freeze
+			// b) 保持镜像播放 —— 镜像暂停是最常见的僵住原因
 			try {
 				if (view.paused && view.srcObject) {
 					var pv = view.play();
@@ -327,22 +366,22 @@ var __AppPanel = {
 				}
 			} catch (e) { }
 
-			// c) liveness on the mirror itself
+			// c) 检查镜像自身是否还在走帧
 			var vu = view.currentTime;
 			var stalled = view.videoWidth > 0 && vu === lastVu;
 			lastVu = vu;
 
 			if (!stalled) { strikes = 0; return; }
 			strikes++;
-			// First strike: a paused mirror; second: wait one more cycle.
+			// 第一次：镜像暂停；第二次：再等一个周期。
 			if (strikes >= 2 && strikes < 4) {
 				try {
 					var pr = view.play();
 					if (pr && pr.catch) pr.catch(function () { });
 				} catch (e) { }
 			}
-			// Only rebuild once the picture has been frozen for ~9s, and never more
-			// than _restartCap times per PiP session.
+			// 只有画面冻结约 9 秒后才重建，且每次 PiP 会话
+			// 不超过 _restartCap 次。
 			if (strikes >= 3 && self._restarts < self._restartCap) {
 				self._restarts++;
 				strikes = 0;
@@ -369,7 +408,7 @@ var __AppPanel = {
 			console.error('[SepWin] failed to rebuild the PiP stream:', e);
 		}
 	},
-	// Prepare the PiP document once (styles + control panel), then show the node.
+	// 先把 PiP 文档准备好（样式 + 控制面板），再显示节点。
 	_mountPip: function (pipWin, target) {
 		var self = this;
 		var doc = pipWin.document;
@@ -383,8 +422,8 @@ var __AppPanel = {
 			'align-items:center;justify-content:center;overflow:auto;background:#000}' +
 			'#__sepWinPipWrap>.__pipPlain>*{max-width:100%;max-height:100%}';
 		doc.head.appendChild(style);
-		// Same control panel stylesheet as the classic window, so the toolbar looks
-		// identical inside the PiP window.
+		// 使用与经典窗口相同的控制面板样式表，
+		// 让工具栏在 PiP 里外观一致。
 		var css = doc.createElement('link');
 		css.rel = 'stylesheet';
 		css.href = chrome.runtime.getURL('css/panel.css');
@@ -400,9 +439,22 @@ var __AppPanel = {
 		this._showNode(target);
 		this._addPipPanel(pipWin);
 
-		// Keep the machine awake and the source tab alive while the PiP window exists.
+		// PiP 窗口存在期间保持屏幕唤醒、源标签页存活。
 		this._keepAwake(true);
 		this._visibilityShim(true);
+		// 让页面按 PiP 窗口而不是原页面视口计算覆盖层尺寸
+		// （这正是弹幕字号能跟随窗口的原因）。
+		// 新开的 PiP 窗口报 0x0，因此用请求时的尺寸兜底，
+		// 等它有真实布局后再补一次。
+		var reqW = (this._pipRequested && this._pipRequested.w) || 0;
+		var reqH = (this._pipRequested && this._pipRequested.h) || 0;
+		this._viewportShim(true, pipWin.innerWidth || reqW, pipWin.innerHeight || reqH);
+		setTimeout(function () {
+			self._viewportShim(true, pipWin.innerWidth || reqW, pipWin.innerHeight || reqH);
+		}, 300);
+		setTimeout(function () {
+			self._viewportShim(true, pipWin.innerWidth || reqW, pipWin.innerHeight || reqH);
+		}, 1200);
 		this._requestWakeLock(pipWin);
 		try {
 			pipWin.document.addEventListener('visibilitychange', function () {
@@ -416,12 +468,15 @@ var __AppPanel = {
 			self._stopPipStream();
 			self._restorePip();
 		});
-		// Keep the region fitted while the user resizes the PiP window.
-		pipWin.addEventListener('resize', function () { self._fitPipHost(); });
+		// 用户拖动改变 PiP 窗口大小时，保持区域跟随。
+		pipWin.addEventListener('resize', function () {
+			self._fitPipHost();
+			self._viewportShim(true, pipWin.innerWidth, pipWin.innerHeight);
+		});
 	},
-	// Show `node` in the PiP window. A node containing a <video> is MIRRORED (the
-	// original stays in the page, so live MSE playback keeps running); anything else
-	// is moved into the PiP document. Up/down reuse this to walk the DOM.
+	// 在 PiP 窗口里显示 `node`。含 <video> 的节点走"镜像"：
+	// 原节点留在页面里，直播的 MSE 播放不中断；其它节点
+	// 直接搬进 PiP 文档。上一级/下一级复用这个函数遍历 DOM。
 	_showNode: function (node) {
 		var doc = this._pipWin.document;
 		var wrap = doc.getElementById('__sepWinPipWrap');
@@ -430,7 +485,7 @@ var __AppPanel = {
 			wrap.id = '__sepWinPipWrap';
 			doc.body.appendChild(wrap);
 		}
-		// Drop whatever is currently shown, then start from an empty wrapper.
+		// 先清掉当前显示的内容，再从空容器开始。
 		this._restorePipNode();
 		this._stopWatchdog();
 		this._stopPipStream();
@@ -439,19 +494,19 @@ var __AppPanel = {
 		var ctx = this._findVideoContext(node);
 		var ctxVideo = ctx ? ctx.video : null;
 		if (ctx) {
-			// Ignore invisible/zero-size overlays (captcha ghosts, hidden layers), but
-			// keep the video we found so it can still be mirrored.
+			// 忽略不可见/零尺寸的覆盖层（验证码幽灵层、隐藏层），
+			// 但保留已找到的 video，仍可镜像。
 			var cr = ctx.host.getBoundingClientRect();
 			if (cr.width < 20 || cr.height < 20) ctx = null;
 		}
 		if (ctx) {
 			if (ctx.host === ctx.video) {
-				// The region IS the video element: mirror it, never move it (moving a
-				// live MSE player is what breaks playback).
+				// 区域本身就是 video：只镜像，绝不搬动（搬动直播 MSE
+				// 播放器正是黑屏的原因）。
 				this._showMirrorOnly(ctx.video);
 				return;
 			}
-			// Region containing the player: show its real DOM with the video mirrored.
+			// 区域包含播放器：显示其真实 DOM，video 用镜像。
 			this._showHostMirror(ctx.host, ctx.video);
 			this._updatePipState();
 			return;
@@ -459,14 +514,14 @@ var __AppPanel = {
 		if (node !== document.body) {
 			var pageVideo = ctxVideo || this._pickPageVideo();
 			if (pageVideo) {
-				// No usable region around the click — just mirror the video.
+				// 点击处没有可用区域 —— 只镜像 video。
 				this._showMirrorOnly(pageVideo);
 				return;
 			}
 		}
 		this._pip = {
 			target: node, parent: node.parentNode, next: node.nextSibling,
-			selector: Selector.getSelector(node)
+			selector: use('Selector').getSelector(node)
 		};
 		var holder = doc.createElement('div');
 		holder.className = '__pipPlain';
@@ -474,10 +529,11 @@ var __AppPanel = {
 		wrap.appendChild(holder);
 		this._updatePipState();
 	},
-	// Move the region's DOM into the PiP document while the real <video> stays in the
-	// page (parked off-screen, still playing) and a mirrored copy takes its place.
-	// This keeps MSE streams alive AND lets up/down show the parent/child region.
+	// 把区域的 DOM 移进 PiP 文档，真实 <video> 留在页面里
+	// （停在屏幕外，继续播放），由镜像副本占位。
+	// 这样 MSE 流不会断，上一级/下一级也能照常切换区域。
 	_showHostMirror: function (host, video) {
+		var self = this;
 		var doc = this._pipWin.document;
 		var wrap = doc.getElementById('__sepWinPipWrap');
 		this._copyPageStyles();
@@ -500,23 +556,26 @@ var __AppPanel = {
 			console.error('[SepWin] captureStream failed:', e);
 		}
 
-		// The mirror takes the <video>'s place in the DOM and inherits its classes and
-		// inline styles, so the site's own responsive CSS sizes it exactly like the real
-		// element when the region is resized to the PiP window.
+		// 镜像在 DOM 中占住 <video> 的位置，并继承它的 class 与
+		// 内联样式，因此站点自己的响应式 CSS 会像对待真实
+		// 元素一样，按 PiP 窗口尺寸调整它。
 		this._pipHost = host;
-		// Snapshot the inline styles so closing restores the page exactly.
+		// 快照内联样式，关闭时把页面精确还原。
 		this._pipHostCss = host.getAttribute('style');
 		if (!host.style.position || host.style.position === 'static') {
 			host.style.position = 'relative';
 		}
 		if (video.className) view.className = video.className;
 		var vStyle = video.getAttribute('style');
+		// 保持站点自身的渲染（它 CSS 里的 object-fit: contain）。不要
+		// 拉伸/平铺画面去填满盒子 —— 区域恰好是
+		// PiP 窗口尺寸而已，弹幕层另行对齐到画面。
 		view.style.cssText = (vStyle ? vStyle.replace(/\s*;?\s*$/, ';') : '') +
 			'pointer-events:none;background:#000;';
 		view.setAttribute('playsinline', '');
 		view.removeAttribute('controls');
 
-		// Remember the video's slot, then park the real element off-screen.
+		// 记住 video 原来的位置，再把真实元素停到屏幕外。
 		this._pipParked = { video: video, parent: video.parentNode, next: video.nextSibling };
 		if (video.parentNode) video.parentNode.insertBefore(view, video);
 		var park = document.getElementById('__sepWinPark');
@@ -531,24 +590,29 @@ var __AppPanel = {
 
 		this._pip = {
 			target: host, parent: host.parentNode, next: host.nextSibling,
-			selector: Selector.getSelector(host), mirrored: true
+			selector: use('Selector').getSelector(host), mirrored: true
 		};
-		// The region loses its page layout context inside the PiP document; give it the
-		// PiP window's own box so the site's responsive CSS re-lays it out there.
+		// 区域进入 PiP 文档后失去了页面的布局上下文，
+		// 于是给它 PiP 窗口的盒子，让站点 CSS 在此重新排版。
 		wrap.appendChild(host);
 		this._fitPipHost();
-		// Live MediaStream sources need an explicit play() in some cases.
+		// 直播用的 MediaStream 有时需要显式 play()。
 		if (view.srcObject && view.play) {
 			var pr = view.play();
 			if (pr && pr.catch) pr.catch(function () { });
 		}
 		this._pipVideo = video;
 		this._pipView = view;
+		// 站点会在 <video> 离开页面后重建播放器；
+		// 这些替代品一出现就隐藏。
+		this._suppressForeignVideos();
+		setTimeout(function () { self._suppressForeignVideos(); }, 400);
+		setTimeout(function () { self._suppressForeignVideos(); }, 1500);
 		this._startWatchdog();
 	},
-	// Give the captured region the PiP window's own width/height (no scaling) so the
-	// page's responsive layout re-flows into the window, exactly like the classic
-	// window does. Called on open and on every window resize.
+	// 把抓取区域的宽高设为 PiP 窗口的宽高（不做缩放），
+	// 让页面的响应式布局在窗口中重排，
+	// 与经典窗口一致。打开时和每次窗口尺寸变化时调用。
 	_fitPipHost: function () {
 		var host = this._pipHost, win = this._pipWin;
 		if (!host || !win) return;
@@ -562,7 +626,7 @@ var __AppPanel = {
 		host.style.height = vh + 'px';
 		host.style.boxSizing = 'border-box';
 	},
-	// A moved region loses all page styling unless the stylesheets come along.
+	// 搬走的区域如果不带样式表，会丢掉页面全部样式。
 	_copyPageStyles: function () {
 		if (this._pipStylesCopied) return;
 		this._pipStylesCopied = true;
@@ -583,9 +647,9 @@ var __AppPanel = {
 			}
 		}
 	},
-	// Build the right-hand control panel inside the PiP window with the SAME seven
-	// buttons as the classic window. ButtonPanel lives in the page document, so the
-	// PiP document needs its own copy (or the window has no menu at all).
+	// 在 PiP 窗口里构建与经典窗口相同的七个按钮的控制面板。
+	// ButtonPanel 存在于页面文档中，
+	// 因此 PiP 文档需要自己的副本（否则窗口里没有菜单）。
 	_addPipPanel: function (pipWin) {
 		var self = this;
 		var doc = pipWin.document;
@@ -610,9 +674,9 @@ var __AppPanel = {
 		doc.body.appendChild(panel);
 		this._pipPanel = panel;
 
-		// Let bookmark state responses target these buttons instead of the
-		// (absent) page panel.
-		ButtonPanel.btn_bkm = panel.querySelector('#__btn_bkm');
+		// 让书签状态回包指向这些按钮，而不是
+		// 页面上（并不存在的）面板。
+		use('ButtonPanel').btn_bkm = panel.querySelector('#__btn_bkm');
 
 		doc.addEventListener('click', function (e) {
 			var t = e.target;
@@ -634,10 +698,10 @@ var __AppPanel = {
 					self._pipNavDown();
 					break;
 				case '__btn_prsc':
-					__BgCmd.sendCmd('printScr', { name: window.location.hostname });
+					use('__BgCmd').sendCmd('printScr', { name: window.location.hostname });
 					break;
 				case '__btn_bkm':
-					if (self._pip) Bookmarks.addBookmark(self._pip.target);
+					if (self._pip) use('Bookmarks').addBookmark(self._pip.target);
 					break;
 				case '__btn_link':
 					if (self._pip) self._showPipLink(doc, self._pip.target);
@@ -647,7 +711,7 @@ var __AppPanel = {
 
 		this._updatePipState();
 	},
-	// Reflect the current node / saved-size state on the PiP toolbar.
+	// 在 PiP 工具栏上反映当前节点/尺寸保存状态。
 	_updatePipState: function () {
 		var p = this._pipPanel, st = this._pip;
 		if (!p || !st) return;
@@ -660,7 +724,7 @@ var __AppPanel = {
 			parent !== document.documentElement;
 		var canDown = this._pipStack && this._pipStack.length > 0;
 
-		// The classic window hides these three when the whole page is shown.
+		// 整页显示时，经典窗口会隐藏这三个按钮。
 		up.style.display = isBody ? 'none' : '';
 		dwn.style.display = isBody ? 'none' : '';
 		save.style.display = isBody ? 'none' : '';
@@ -674,26 +738,26 @@ var __AppPanel = {
 		save.setAttribute('title',
 			chrome.i18n.getMessage(saved ? 'PanelSaveSizeOn' : 'PanelSaveSizeOff'));
 	},
-	// Save / clear the PiP window size for the current selector, so the next pop-out
-	// of the same region reopens at that size.
+	// 保存/清除当前选择器的 PiP 窗口尺寸，下次弹出同一
+	// 区域时就按这个尺寸打开。
 	_pipToggleSave: function () {
 		var st = this._pip;
 		if (!st || !this._pipWin) return;
 		var sel = st.selector;
 		if (this._sizes[sel]) {
 			delete this._sizes[sel];
-			__BgCmd.sendCmd('savePipSize', { selector: sel, size: '{}' });
+			use('__BgCmd').sendCmd('savePipSize', { selector: sel, size: '{}' });
 		} else {
 			var size = {
 				width: Math.round(this._pipWin.innerWidth),
 				height: Math.round(this._pipWin.innerHeight)
 			};
 			this._sizes[sel] = size;
-			__BgCmd.sendCmd('savePipSize', { selector: sel, size: JSON.stringify(size) });
+			use('__BgCmd').sendCmd('savePipSize', { selector: sel, size: JSON.stringify(size) });
 		}
 		this._updatePipState();
 	},
-	// Show the parent element instead of the current one (classic "scroll up").
+	// 显示父元素（经典窗口的"上一级"）。
 	_pipNavUp: function () {
 		var st = this._pip;
 		if (!st) return;
@@ -702,16 +766,16 @@ var __AppPanel = {
 		this._pipStack.push(st.target);
 		this._showNode(parent);
 	},
-	// Go back to the previously shown (child) element (classic "scroll down").
+	// 回到之前显示的子元素（经典窗口的"下一级"）。
 	_pipNavDown: function () {
 		if (!this._pipStack || !this._pipStack.length) return;
 		this._showNode(this._pipStack.pop());
 	},
-	// Put the currently mounted node back where it came from.
+	// 把当前挂载的节点放回原处。
 	_restorePipNode: function () {
 		var st = this._pip;
 		try {
-			// 1. put the real <video> back into its original slot
+			// 1. 把真实 <video> 放回原来的位置
 			var parked = this._pipParked;
 			if (parked) {
 				this._pipParked = null;
@@ -727,7 +791,7 @@ var __AppPanel = {
 					console.error('[SepWin] failed to restore the video element:', e);
 				}
 			}
-			// 2. move the shown region back
+			// 2. 把显示的区域搬回去
 			if (st) {
 				this._pip = null;
 				if (st.parent && st.target.parentNode !== st.parent) {
@@ -735,12 +799,12 @@ var __AppPanel = {
 					st.parent.insertBefore(st.target, ref);
 				}
 			}
-			// 3. drop the mirror that travelled back with the region
+			// 3. 删掉跟着区域一起搬回来的镜像
 			var views = document.querySelectorAll('#__sepWinPipVideo');
 			for (var i = 0; i < views.length; i++) {
 				if (views[i].parentNode) views[i].parentNode.removeChild(views[i]);
 			}
-			// 4. restore the inline styles we changed (scale/position/size)
+			// 4. 还原我们改过的内联样式（缩放/位置/尺寸）
 			if (this._pipHost) {
 				if (this._pipHostCss === null || this._pipHostCss === undefined) {
 					this._pipHost.removeAttribute('style');
@@ -755,7 +819,7 @@ var __AppPanel = {
 			console.error('[SepWin] failed to restore node from PiP:', e);
 		}
 	},
-	// Close the PiP window (the node is put back by _restorePip on pagehide).
+	// 关闭 PiP 窗口（节点由 pagehide 里的 _restorePip 放回）。
 	cancelPip: function () {
 		if (this._pipWin && !this._pipWin.closed) {
 			this._pipWin.close();
@@ -763,7 +827,7 @@ var __AppPanel = {
 			this._restorePip();
 		}
 	},
-	// "Get link" overlay rendered inside the PiP document.
+	// 在 PiP 文档里渲染"获取链接"浮层。
 	_showPipLink: function (doc, target) {
 		var old = doc.getElementById('__pip_link_overlay');
 		if (old) { old.parentNode.removeChild(old); return; }
@@ -776,7 +840,7 @@ var __AppPanel = {
 			'padding:12px;display:flex;flex-direction:column;gap:10px;' +
 			'font:600 13px/1.4 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;';
 		var ta = doc.createElement('textarea');
-		ta.value = Selector.getLink(target);
+		ta.value = use('Selector').getLink(target);
 		ta.style.cssText = 'width:100%;height:110px;border:1px solid #d7dce6;border-radius:8px;' +
 			'padding:8px;font:12px/1.5 ui-monospace,Consolas,monospace;resize:none;';
 		var ok = doc.createElement('button');
@@ -794,12 +858,13 @@ var __AppPanel = {
 		ta.focus();
 		ta.select();
 	},
-	// Put the moved node back where it came from once the PiP window closes.
+	// PiP 窗口关闭后，把搬走的节点放回原处。
 	_restorePip: function () {
 		this._stopWatchdog();
 		this._stopPipStream();
 		this._releaseWakeLock();
 		this._visibilityShim(false);
+		this._viewportShim(false);
 		this._keepAwake(false);
 		this._pipVideo = null;
 		this._pipView = null;
@@ -808,12 +873,12 @@ var __AppPanel = {
 		this._pipStack = [];
 		this._pipPanel = null;
 		this._pipWin = null;
-		// Drop the reference to the PiP toolbar button so later bookmark state
-		// updates don't touch a detached node.
-		ButtonPanel.btn_bkm = {};
+		// 丢掉 PiP 工具栏按钮的引用，避免后续书签状态
+		// 更新碰到已经脱离文档的节点。
+		use('ButtonPanel').btn_bkm = {};
 	},
-	// Shown when PiP is requested without a page gesture (popup / context menu):
-	// a real click on this banner supplies the activation the API requires.
+	// 在页面内没有手势时（弹窗/右键菜单触发）显示：
+	// 点一下这个横幅即可提供 API 所需的用户激活。
 	_promptActivate: function (target) {
 		var self = this;
 		if (this._promptEl && this._promptEl.parentNode) {
@@ -846,33 +911,33 @@ var __AppPanel = {
 		e.stopImmediatePropagation();
 	},
 	cancel: function () {
-		Selector.restoreURL();
-		__BgCmd.sendCmd('cancel', {});
-		CmdToFrame.remove();
-		Modification.cancel();
-		ButtonPanel.remove();
-		EventPanel.remove();
-		SepWinEvents.removeEvents();
+		use('Selector').restoreURL();
+		use('__BgCmd').sendCmd('cancel', {});
+		use('CmdToFrame').remove();
+		use('Modification').cancel();
+		use('ButtonPanel').remove();
+		use('EventPanel').remove();
+		use('SepWinEvents').removeEvents();
 	},
 	dellIcon: function () {
-		Observer.disconnectDomChange();
-		__Icons.delAllIcon();
+		use('Observer').disconnectDomChange();
+		use('__Icons').delAllIcon();
 	},
 	responseSelectors: function () {
-		__BgCmd.sendCmd('getItems', {});
+		use('__BgCmd').sendCmd('getItems', {});
 	},
 	saveSelector: function (newSelector) {
-		__BgCmd.sendCmd('saveSelector', { prop: { name: 'css', value: newSelector } });
+		use('__BgCmd').sendCmd('saveSelector', { prop: { name: 'css', value: newSelector } });
 	},
 	saveSize:function(newSize){
-		__BgCmd.sendCmd('saveSize', { prop: { name: 'size', value: newSize } });
+		use('__BgCmd').sendCmd('saveSize', { prop: { name: 'size', value: newSize } });
 	},
 	start: function () {
-		if (Modification.isSeparate) return;
+		if (use('Modification').isSeparate) return;
 		if (!this.run) {
 			this.run = !this.run;
 			this.dellIcon();
-			__Element.addWrapper();
+			use('__Element').addWrapper();
 			window.addEventListener('mousedown', __AppPanel.blockEvent, true);
 			window.addEventListener('mouseup', __AppPanel.blockEvent, true);
 			window.addEventListener('mousemove', __AppPanel.mouseMove, true);
@@ -888,8 +953,8 @@ var __AppPanel = {
 		if (this.run) {
 			this.run = !this.run;
 			this.responseSelectors();
-			__Element.delWrapper();
-			__Element.reset();
+			use('__Element').delWrapper();
+			use('__Element').reset();
 			window.removeEventListener('mousedown', __AppPanel.blockEvent, true);
 			window.removeEventListener('mouseup', __AppPanel.blockEvent, true);
 			window.removeEventListener('mousemove', __AppPanel.mouseMove, true);
@@ -909,13 +974,13 @@ var __AppPanel = {
 				case 'OBJECT':
 				case 'IFRAME':
 				case 'SVG':
-					__Element.set(e.target);
+					use('__Element').set(e.target);
 					this.scroll = 0;
 					break;
 				case 'G':
 				case 'PATH':
 				case 'RECT':
-					__Element.set(e.target.parentNode);
+					use('__Element').set(e.target.parentNode);
 					this.scroll = 0;
 					break;
 			}
@@ -923,8 +988,8 @@ var __AppPanel = {
 	},
 	mouseClick: function (e) {
 		this.blockEvent(e);
-		if (__Element.prototype) {
-			this.apply(__Element.prototype);
+		if (use('__Element').prototype) {
+			this.apply(use('__Element').prototype);
 		} else {
 			this.stop();
 		}
@@ -942,7 +1007,7 @@ var __AppPanel = {
 				i = this.scroll = 0;
 			}
 		}
-		__Element.set(target);
+		use('__Element').set(target);
 	},
 	mouseMove: function (e) {
 		this.blockEvent(e);
@@ -951,10 +1016,10 @@ var __AppPanel = {
 		this.lastEv = e.timeStamp;
 		var target = e.target;
 		if (target.id == '__panelWrapper') {
-			__Element.hideWrapper();
+			use('__Element').hideWrapper();
 			target = document.elementFromPoint(e.clientX, e.clientY);
 			if ('elementsFromPoint' in document) {
-			//Chrome 43
+			// Chrome 43
 				document.elementsFromPoint(e.clientX, e.clientY).forEach(function (element) {
 					switch (element.tagName.toUpperCase()) {
 						case 'VIDEO':
@@ -966,7 +1031,7 @@ var __AppPanel = {
 					}
 				}, this);
 			}
-			__Element.showWrapper();
+			use('__Element').showWrapper();
 		}
 
 		if (target === this.target || target == document) { return true; }
@@ -974,7 +1039,7 @@ var __AppPanel = {
 		this.target = target;
 
 		if (this.target && this.target.tagName !== 'BODY') {
-			__Element.set(this.target);
+			use('__Element').set(this.target);
 			this.scroll = 0;
 		}
 	},
@@ -993,15 +1058,19 @@ __AppPanel.mouseClick = __AppPanel.mouseClick.bind(__AppPanel);
 __AppPanel.mouseScroll = __AppPanel.mouseScroll.bind(__AppPanel);
 
 var __onLoad = function () {
-	if(Bookmarks.isEntireTab){
-		Bookmarks.isEntireTab = false;
+	if(use('Bookmarks').isEntireTab){
+		use('Bookmarks').isEntireTab = false;
 		__AppPanel.updateTab();
 	}else{
 		__AppPanel.responseSelectors();
-		Bookmarks.domChange();
-		__BgCmd.sendCmd('isDuplicate', {});	
+		use('Bookmarks').domChange();
+		use('__BgCmd').sendCmd('isDuplicate', {});	
 	}
 };
-Bookmarks.getHash();
+use('Bookmarks').getHash();
 __AppPanel._initCfg();
 window.addEventListener('DOMContentLoaded', __onLoad);
+
+// ---- 注册表 ----
+register('__AppPanel', __AppPanel);
+register('__onLoad', __onLoad);

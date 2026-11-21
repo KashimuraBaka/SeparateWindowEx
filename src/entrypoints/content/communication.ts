@@ -1,5 +1,9 @@
+// @ts-nocheck -- 遗留文件体：模块边界已就位，类型迁移留到后续步骤。
+import { register, use } from './runtime';
+
+
 /**
- * Author: Kashimura
+ * 作者：Kashimura
  */
 if(window == top){
 	chrome.runtime.onMessage.addListener(
@@ -24,16 +28,16 @@ var CmdFromFrame={
 		}
 	},
 	isVideo:function(){
-		EventPanel.insertBtnResize();
+		use('EventPanel').insertBtnResize();
 	},
 	isModify:function(){
-		EventPanel.switchBtnResize(true);
+		use('EventPanel').switchBtnResize(true);
 	},
 	isCancel:function(){
-		EventPanel.switchBtnResize(false);
+		use('EventPanel').switchBtnResize(false);
 	},
 	clear:function(){
-		EventPanel.removeBtnResize();
+		use('EventPanel').removeBtnResize();
 	},
 	toggleFullScr:function(){
 		var fullscr=false;
@@ -85,34 +89,34 @@ var __BgCmd={
 		return resp;
 	},
 	setItems:function(arg){
-		Observer.disconnectDomChange();
-		__Icons.setSelectors(arg.icons,arg.hideIcons);
-		Observer.domChange();
+		use('Observer').disconnectDomChange();
+		use('__Icons').setSelectors(arg.icons,arg.hideIcons);
+		use('Observer').domChange();
 	},
 	refreshIcon:function(){
-		__Element.switchOff();
-		__AppPanel.responseSelectors();
+		use('__Element').switchOff();
+		use('__AppPanel').responseSelectors();
 	},
 	hideAllIcons:function(){
-		__AppPanel.dellIcon();
+		use('__AppPanel').dellIcon();
 	},
 	switchOn:function(arg){
-		__Element.switchOn(Selector.getFirstVisibleElem(arg.css));
+		use('__Element').switchOn(use('Selector').getFirstVisibleElem(arg.css));
 	},
 	switchOff:function(){
-		__Element.switchOff();
+		use('__Element').switchOff();
 	},
 	start:function(){
-		__AppPanel.start();
+		use('__AppPanel').start();
 	},
 	stop:function(){
-		__AppPanel.stop();
+		use('__AppPanel').stop();
 	},
 	entireTab:function(){
-		__AppPanel.apply(document.body);
+		use('__AppPanel').apply(document.body);
 	},
 	updateEntireTab:function(){
-		__AppPanel.updateTab();
+		use('__AppPanel').updateTab();
 	},
 	saveImage:function(arg){
 		let elem=document.createElement('a');
@@ -124,7 +128,7 @@ var __BgCmd={
 		document.body.removeChild(elem);
 	},
 	isRun:function(){
-		return __AppPanel.run;
+		return use('__AppPanel').run;
 	},
 	sendCmd:function(cmd,arg,callback){
 		chrome.runtime.sendMessage({cmd:cmd,arg:arg},
@@ -134,29 +138,34 @@ var __BgCmd={
 		);
 	},
 	isBookmark:function(arg){
-		Bookmarks.isBookmark=arg;
+		use('Bookmarks').isBookmark=arg;
 		// In Document PiP mode the page's button panel does not exist (the PiP
 		// window owns its own copy), so guard against missing buttons.
-		if (ButtonPanel && ButtonPanel.btn_bkm && ButtonPanel.btn_bkm.classList) {
-			ButtonPanel.setBookmark(arg);
+		if (use('ButtonPanel') && use('ButtonPanel').btn_bkm && use('ButtonPanel').btn_bkm.classList) {
+			use('ButtonPanel').setBookmark(arg);
 		}
 	},
 	isSavedSize:function(arg){
-		Modification.isSavedSize = arg;
-		if (ButtonPanel && ButtonPanel.btn_save && ButtonPanel.btn_save.classList) {
-			ButtonPanel.setSavedIcon(arg);
+		use('Modification').isSavedSize = arg;
+		if (use('ButtonPanel') && use('ButtonPanel').btn_save && use('ButtonPanel').btn_save.classList) {
+			use('ButtonPanel').setSavedIcon(arg);
 		}
 	},
 	apply:function(arg){
-		__AppPanel.apply(document.querySelector(arg));
+		use('__AppPanel').apply(document.querySelector(arg));
 	},
 	cancel:function(){
-		__AppPanel.cancel();
+		use('__AppPanel').cancel();
 	},
 	duplicate:function(arg){
-		Duplicate.preparation(arg.selector);
+		use('Duplicate').preparation(arg.selector);
 	},
 	modifyURL:function(){
-		Selector.modifyURL(Modification.target);
+		use('Selector').modifyURL(use('Modification').target);
 	}
 };
+
+// ---- 注册表 ----
+register('CmdFromFrame', CmdFromFrame);
+register('CmdToFrame', CmdToFrame);
+register('__BgCmd', __BgCmd);

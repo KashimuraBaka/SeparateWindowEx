@@ -1,5 +1,9 @@
+// @ts-nocheck -- 遗留文件体：模块边界已就位，类型迁移留到后续步骤。
+import { register, use } from './runtime';
+
+
 /**
- * Author: Kashimura
+ * 作者：Kashimura
  */
 var EventPanel = {
 	panel: undefined,
@@ -16,7 +20,7 @@ var EventPanel = {
 		if (!this.panel) {
 			this.panel = document.createElement('div');
 			this.panel.id = this.id.panel;
-			CssControl.setComClass(this.panel);
+			use('CssControl').setComClass(this.panel);
 			document.body.appendChild(this.panel);
 		}
 	},
@@ -32,7 +36,7 @@ var EventPanel = {
 			this.btn_resize = document.createElement('button');
 			this.btn_resize.id = this.id.btn_resize;
 			this.btn_resize.title = chrome.i18n.getMessage('PanelLoadIframe');
-			this.btn_resize.classList.add(CssControl.class.eventPanel);
+			this.btn_resize.classList.add(use('CssControl').class.eventPanel);
 			this.btn_resize.classList.add('__btn_resize_off');
 			this.panel.appendChild(this.btn_resize);
 			this.panel.classList.add('__evt_panel_blink');
@@ -44,7 +48,7 @@ var EventPanel = {
 			this.btn_player = document.createElement('button');
 			this.btn_player.id = this.id.btn_player;
 			this.btn_player.title = chrome.i18n.getMessage('PanelForcePlayerOn');
-			this.btn_player.classList.add(CssControl.class.eventPanel);
+			this.btn_player.classList.add(use('CssControl').class.eventPanel);
 			this.btn_player.classList.add('__btn_player_off');
 			this.panel.appendChild(this.btn_player);
 			this.panel.classList.add('__evt_panel_blink');
@@ -98,9 +102,9 @@ var EventPanel = {
 	},
 	clickBtnResize: function () {
 		if (this.isModify) {
-			CmdToFrame.cancel();
+			use('CmdToFrame').cancel();
 		} else {
-			CmdToFrame.modify();
+			use('CmdToFrame').modify();
 		}
 	}
 };
@@ -132,17 +136,17 @@ var ButtonPanel = {
 	isShowLink: false,
 	windowZoom: 0,
 	add: function () {
-		CssControl.insert('panel');
+		use('CssControl').insert('panel');
 		this.panel = document.createElement('div');
-		this.panel.innerHTML = '<button id="' + this.id.btn_back + '" class="' + CssControl.class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelBack') + '"></button>' +
-			'<button id="' + this.id.btn_save + '" class="' + CssControl.class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelSaveSize') + '"></button>' +
-			'<button id="' + this.id.btn_up + '" class="' + CssControl.class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelScrollUp') + '"></button>' +
-			'<button id="' + this.id.btn_dwn + '" class="' + CssControl.class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelScrollDown') + '"></button>' +
-			'<button id="' + this.id.btn_prsc + '" class="' + CssControl.class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelPrintScreen') + '"></button>' +
-			'<button id="' + this.id.btn_bkm + '" class="' + CssControl.class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelBookMarks') + '"></button>' +
-			'<button id="' + this.id.btn_link + '" class="' + CssControl.class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelGetLink') + '"></button>';
+		this.panel.innerHTML = '<button id="' + this.id.btn_back + '" class="' + use('CssControl').class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelBack') + '"></button>' +
+			'<button id="' + this.id.btn_save + '" class="' + use('CssControl').class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelSaveSize') + '"></button>' +
+			'<button id="' + this.id.btn_up + '" class="' + use('CssControl').class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelScrollUp') + '"></button>' +
+			'<button id="' + this.id.btn_dwn + '" class="' + use('CssControl').class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelScrollDown') + '"></button>' +
+			'<button id="' + this.id.btn_prsc + '" class="' + use('CssControl').class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelPrintScreen') + '"></button>' +
+			'<button id="' + this.id.btn_bkm + '" class="' + use('CssControl').class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelBookMarks') + '"></button>' +
+			'<button id="' + this.id.btn_link + '" class="' + use('CssControl').class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelGetLink') + '"></button>';
 		this.panel.id = this.id.panel;
-		CssControl.setComClass(this.panel);
+		use('CssControl').setComClass(this.panel);
 		this.panel.classList.add('__btn_panel_blink');
 		document.body.appendChild(this.panel);
 		this.btn_save = document.getElementById(this.id.btn_save);
@@ -156,15 +160,15 @@ var ButtonPanel = {
 			this.btn_dwn.style.display = 'none';
 			this.btn_save.style.display = 'none';
 		}
-		__BgCmd.sendCmd('checkSaveSize', { selector: Modification.selector });
-		Bookmarks.checkBookmark(Modification.target);
+		use('__BgCmd').sendCmd('checkSaveSize', { selector: Modification.selector });
+		use('Bookmarks').checkBookmark(Modification.target);
 		this.scrollDownEnabled(false);
 		setTimeout(function () {
 			ButtonPanel.changeZoom();
 		}, 650);
 	},
 	remove: function () {
-		CssControl.remove('panel');
+		use('CssControl').remove('panel');
 		if (this.panel instanceof HTMLElement) document.body.removeChild(this.panel);
 		if (this.isShowLink) { this.delWinLink(); }
 		this.btn_save = {};
@@ -177,7 +181,7 @@ var ButtonPanel = {
 		this.win_link = {};
 	},
 	clickBack: function () {
-		__AppPanel.cancel();
+		use('__AppPanel').cancel();
 	},
 	clickSave:function(){
 		let size={};
@@ -190,22 +194,22 @@ var ButtonPanel = {
 			}
 		}
 		Modification.isSavedSize=!Modification.isSavedSize;
-		__AppPanel.saveSize(JSON.stringify(size));
+		use('__AppPanel').saveSize(JSON.stringify(size));
 		this.setSavedIcon(Modification.isSavedSize);
 	},
 	clickUp: function () {
 		Modification.scrollUp();
-		Bookmarks.checkBookmark(Modification.target);
+		use('Bookmarks').checkBookmark(Modification.target);
 	},
 	clickDown: function () {
 		Modification.scrollDown();
-		Bookmarks.checkBookmark(Modification.target);
+		use('Bookmarks').checkBookmark(Modification.target);
 	},
 	clickPrtScr: function () {
 		this.panel.style.display = 'none';
 		VideoControls.hide();
 		setTimeout(function () {
-			__BgCmd.sendCmd('printScr', { name: window.location.hostname });
+			use('__BgCmd').sendCmd('printScr', { name: window.location.hostname });
 		}.bind(this), 50);
 		setTimeout(function () {
 			this.panel.style.display = '';
@@ -213,7 +217,7 @@ var ButtonPanel = {
 		}.bind(this), 150);
 	},
 	clickBkm: function () {
-		Bookmarks.addBookmark(Modification.target);
+		use('Bookmarks').addBookmark(Modification.target);
 	},
 	clickShowLink: function () {
 		if (this.isShowLink) {
@@ -244,9 +248,9 @@ var ButtonPanel = {
 	},
 	showWinLink: function () {
 		this.win_link = document.createElement('div');
-		this.win_link.innerHTML = '<div id="' + this.id.win_link + '"><div><textarea>' + Selector.getLink(Modification.target) + '</textarea></div><button id="' + this.id.btn_win_link + '" class="' + CssControl.class.btnPanel + '" ">OK</button></div>';
+		this.win_link.innerHTML = '<div id="' + this.id.win_link + '"><div><textarea>' + use('Selector').getLink(Modification.target) + '</textarea></div><button id="' + this.id.btn_win_link + '" class="' + use('CssControl').class.btnPanel + '" ">OK</button></div>';
 		this.win_link.id = this.id.win_link_over;
-		CssControl.setComClass(this.win_link);
+		use('CssControl').setComClass(this.win_link);
 		document.body.appendChild(this.win_link);
 		this.isShowLink = true;
 	},
@@ -327,12 +331,12 @@ var Modification = {
 		}
 	},
 	_modifyStyle: function (elem, style, isSet) {
-		if (CssControl.isComClass(elem)) return 0;
+		if (use('CssControl').isComClass(elem)) return 0;
 		if (isSet) {
 			elem.classList.add(style);
-			Observer.init(elem, style);
+			use('Observer').init(elem, style);
 		} else {
-			Observer.disconnect(elem, style);
+			use('Observer').disconnect(elem, style);
 			elem.classList.remove(style);
 		}
 	},
@@ -418,7 +422,7 @@ var Modification = {
 				this.errorRestore();
 				console.log(e);
 			}
-			CssControl.insert('window');
+			use('CssControl').insert('window');
 			this._deleteFunc();
 		}
 	},
@@ -435,17 +439,17 @@ var Modification = {
 			}
 			document.body.removeChild(this.fixFunc);
 		}
-		Observer.clearServers();
+		use('Observer').clearServers();
 		window.scrollTo(this.scrollBefore.left, this.scrollBefore.top);
 		this.target = this.parent = undefined;
 		this.selector = '';
 		this.isSeparate = false;
 		this.flags.scroll = 0;
-		CssControl.remove('window');
+		use('CssControl').remove('window');
 		this._deleteFunc();
 	},
 	cancelOnChangeDOM: function () {
-		Observer.clearServers();
+		use('Observer').clearServers();
 		this.errorRestore();
 		this._scroll(false);
 		this._removeFunc();
@@ -469,7 +473,7 @@ var Modification = {
 		while (parent.tagName !== 'BODY') {
 			if (!parent.classList.contains('__parent')) {
 				this.cancelOnChangeDOM();
-				this.do(this.target, Selector.getSelector(this.target));
+				this.do(this.target, use('Selector').getSelector(this.target));
 				break;
 			}
 			parent = parent.parentNode;
@@ -528,8 +532,8 @@ var Modification = {
 		return true;
 	},
 	saveSelector:function(){
-		this.selector = Selector.getSelector(this.target);
-		__AppPanel.saveSelector(this.selector);
+		this.selector = use('Selector').getSelector(this.target);
+		use('__AppPanel').saveSelector(this.selector);
 	}
 };
 
@@ -549,10 +553,10 @@ var SepWinEvents = {
 		window.removeEventListener('unload', SepWinEvents.unloadPage,true);
 	},
 	onClick: function (event) {
-		if (CssControl.isBtnClass(event.target)) {
+		if (use('CssControl').isBtnClass(event.target)) {
 			this.cmdBtnPanel(event.target.id);
 		}
-		else if (CssControl.isEventClass(event.target)) {
+		else if (use('CssControl').isEventClass(event.target)) {
 			this.cmdEventPanel(event.target.id);
 		} else {
 			if (VideoControls.isPresent) {
@@ -615,11 +619,17 @@ var SepWinEvents = {
 	},
 	unloadPage:function(){
 		if (Modification.target == document.body) {
-			__BgCmd.sendCmd('updatePage', {});
+			use('__BgCmd').sendCmd('updatePage', {});
 		} else {
-			__BgCmd.sendCmd('unloadPage', {});
+			use('__BgCmd').sendCmd('unloadPage', {});
 		}
 	}
 };
 SepWinEvents.onClick = SepWinEvents.onClick.bind(SepWinEvents);
 SepWinEvents.onResize = SepWinEvents.onResize.bind(SepWinEvents);
+
+// ---- 注册表 ----
+register('EventPanel', EventPanel);
+register('ButtonPanel', ButtonPanel);
+register('Modification', Modification);
+register('SepWinEvents', SepWinEvents);

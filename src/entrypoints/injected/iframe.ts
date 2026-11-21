@@ -1,5 +1,6 @@
+// @ts-nocheck -- 遗留代码正在逐文件迁移，先保证运行行为不变。
 /**
- * Author: Kashimura
+ * 作者：Kashimura
  */
 var Frame = {
 	isVideo: false,

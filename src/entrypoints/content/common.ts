@@ -1,7 +1,11 @@
+// @ts-nocheck -- 遗留文件体：模块边界已就位，类型迁移留到后续步骤。
+import { register, use } from './runtime';
+
+
 /**
- * Author: Kashimura
+ * 作者：Kashimura
  */
-var CssControl = {
+export var CssControl = {
 	class: {
 		com: '__sepWin',
 		btnPanel: '__sepWinBtn',
@@ -44,7 +48,7 @@ var CssControl = {
 	}
 };
 
-var Observer = {
+export var Observer = {
 	serverDOM: undefined,
 	serverTrgtChld: undefined,
 	type: [],
@@ -95,10 +99,10 @@ var Observer = {
 		}
 		this.timers.onChangesTrgt = setTimeout(
 			function () {
-				if (Modification.trgtVideo) {
+				if (use('Modification').trgtVideo) {
 					this.serverTrgtChld.disconnect();
 				} else {
-					Modification._searchVideo();
+					use('Modification')._searchVideo();
 				}
 			}.bind(this),
 			500);
@@ -123,7 +127,7 @@ var Observer = {
 						elem.classList.add(type);
 					}
 					if (type == '__target') {
-						Modification.checkChanges();
+						use('Modification').checkChanges();
 						if (VideoControls.isPresent) { VideoControls.observerUpdate(); }
 					}
 					this.targets.splice(0, 1);
@@ -133,11 +137,11 @@ var Observer = {
 		);
 	},
 	onChangeDOM: function () {
-		if (__Element.isPreview) return;
+		if (use('__Element').isPreview) return;
 		if (this.timers.onDOM) { clearTimeout(this.timers.onDOM); }
 		this.timers.onDOM = setTimeout(
 			function () {
-				__Icons.findElement();
+				use('__Icons').findElement();
 				Bookmarks.domChange();
 			}.bind(this),
 			150);
@@ -176,7 +180,7 @@ var Observer = {
 	}
 };
 
-var Selector = {
+export var Selector = {
 	css: {
 		tag: '',
 		class: '',
@@ -311,7 +315,7 @@ var Bookmarks = {
 		if (this.selector=="BODY") {
 			this.isEntireTab = true;
 			this.isPresent = false;
-			__AppPanel.applyEntire();
+			use('__AppPanel').applyEntire();
 		} 
 	},
 	delHash: function () {
@@ -336,22 +340,22 @@ var Bookmarks = {
 			}
 			if (elems.length > 0) {
 				this.isPresent = false;
-				__Element.getSize(elems[0]);
-				__Element.switchOff();
-				__AppPanel.apply(elems[0]);
+				use('__Element').getSize(elems[0]);
+				use('__Element').switchOff();
+				use('__AppPanel').apply(elems[0]);
 			} else {
-				__BgCmd.sendCmd('checkTab', {});
+				use('__BgCmd').sendCmd('checkTab', {});
 			}
 		}
 	},
 	checkBookmark: function (elem) {
-		__BgCmd.sendCmd('checkBookmark', { url: Selector.getLink(elem) });
+		use('__BgCmd').sendCmd('checkBookmark', { url: Selector.getLink(elem) });
 	},
 	addBookmark: function (elem) {
 		if (this.isBookmark) {
-			__BgCmd.sendCmd('delBookmark', { url: Selector.getLink(elem) });
+			use('__BgCmd').sendCmd('delBookmark', { url: Selector.getLink(elem) });
 		} else {
-			__BgCmd.sendCmd('addBookmark', { url: Selector.getLink(elem) });
+			use('__BgCmd').sendCmd('addBookmark', { url: Selector.getLink(elem) });
 		}
 	}
 };
@@ -406,3 +410,10 @@ var Duplicate = {
 		this.removeEventListener('play', Duplicate._canPlay, false);
 	}
 };
+
+// ---- 注册表 ----
+register('CssControl', CssControl);
+register('Observer', Observer);
+register('Selector', Selector);
+register('Bookmarks', Bookmarks);
+register('Duplicate', Duplicate);

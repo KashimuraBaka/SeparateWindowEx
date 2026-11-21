@@ -1,5 +1,9 @@
+// @ts-nocheck -- 遗留文件体：模块边界已就位，类型迁移留到后续步骤。
+import { register, use } from './runtime';
+
+
 /**
- * Author: Kashimura
+ * 作者：Kashimura
  */
 var __Element = {
 	class: '__zoomTarget',
@@ -9,8 +13,8 @@ var __Element = {
 	size: { top: 0, left: 0, width: 0, height: 0 },
 	wrapper: undefined,
 	elemPreview: undefined,
-	addStyle: function () { CssControl.insert('preview'); },
-	delStyle: function () { CssControl.remove('preview'); },
+	addStyle: function () { use('CssControl').insert('preview'); },
+	delStyle: function () { use('CssControl').remove('preview'); },
 	isBigElem: function (elem) {
 		var size = [], big_width = 0, big_height = 0;
 		if (elem) {
@@ -102,3 +106,6 @@ var __Element = {
 		}
 	}
 };
+
+// ---- 注册表 ----
+register('__Element', __Element);

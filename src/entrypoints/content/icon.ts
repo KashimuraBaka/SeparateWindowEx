@@ -1,5 +1,9 @@
+// @ts-nocheck -- 遗留文件体：模块边界已就位，类型迁移留到后续步骤。
+import { register, use } from './runtime';
+
+
 /**
- * Author: Kashimura
+ * 作者：Kashimura
  */
 var __Icons = {
 	icons: [],
@@ -51,7 +55,7 @@ var __Icons = {
 	},
 	findElement: function () {
 		if (this.hideIcons) return;
-		if (this.selectors && !Modification.isSeparate) {
+		if (this.selectors && !use('Modification').isSeparate) {
 			this.selectors.forEach(function (selector) {
 				var elems = document.querySelectorAll(selector);
 				for (var i = 0, length = elems.length; i < length; i++) {
@@ -112,12 +116,12 @@ function Icon(target) {
 	var trgt = null, icon = null, prnt = null, cssClass = '__iconSepWin';
 	this.position = { left: 0, top: 0, vert: true };
 	function enter() {
-		Observer.disconnectDomChange();
-		__Element.switchOn(trgt);
+		use('Observer').disconnectDomChange();
+		use('__Element').switchOn(trgt);
 	}
 	function leave() {
-		__Element.switchOff();
-		Observer.domChange();
+		use('__Element').switchOff();
+		use('Observer').domChange();
 	}
 	function calZindex() {
 		var parent = trgt;
@@ -161,8 +165,8 @@ function Icon(target) {
 	this.click = function (e) {
 		e.preventDefault();
 		e.stopImmediatePropagation();
-		__Element.switchOff();
-		__AppPanel.apply(trgt);
+		use('__Element').switchOff();
+		use('__AppPanel').apply(trgt);
 	};
 	this.isIcon = function (elem) {
 		return icon == elem;
@@ -208,3 +212,7 @@ function Icon(target) {
 		return trgt;
 	};
 }
+
+// ---- 注册表 ----
+register('__Icons', __Icons);
+register('Icon', Icon);
