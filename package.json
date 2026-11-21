@@ -6,12 +6,26 @@
   "license": "MIT",
   "author": "Kashimura",
   "scripts": {
-    "build": "node tools/build.js",
-    "validate": "node tools/validate.js",
-    "package": "node tools/build.js && node tools/package.js",
-    "crx": "node tools/build.js && node tools/validate.js && node tools/crx.js",
-    "install:edge": "node tools/install-edge.js",
-    "release": "node tools/build.js && node tools/validate.js && node tools/package.js && node tools/crx.js",
-    "verify": "node tools/build.js && node tools/validate.js"
+    "build": "vite build",
+    "build:dev": "vite build --mode development",
+    "build:obfuscate": "vite build --mode obfuscate",
+    "watch": "vite build --watch",
+    "test": "node --test test/",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "web-ext lint --source-dir=dist",
+    "package": "npm run build && web-ext build --source-dir=dist --artifacts-dir=build --overwrite-dest"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.3.7",
+    "esbuild": "^0.28.2",
+    "imagetracerjs": "^1.2.6",
+    "javascript-obfuscator": "^5.10.1",
+    "lucide-static": "^1.77.0",
+    "pngjs": "^7.0.0",
+    "sass": "^1.108.2",
+    "terser": "^5.51.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "web-ext": "^10.8.0"
   }
 }

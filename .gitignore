@@ -14,3 +14,11 @@ Thumbs.db
 
 # Agent plugin working data (not part of the extension)
 .mnemon/
+
+# Toolchain dependencies
+/node_modules/
+
+
+# Scratch output from tooling self-tests
+/.tmp/
+
