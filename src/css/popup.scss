@@ -51,10 +51,11 @@ body{
 .wrap-window-size{
 	position: relative;
 	width: 100%;
-	margin-bottom: 12px;
 }
 
 .wrap-settings{
+	/* 折叠面板本身不吃外边距，展开时的间距放在内部首元素上 */
+	margin-top: 0;
 	overflow: hidden;
 	max-height: 0;
 	transition: max-height .3s ease-in-out;
@@ -100,13 +101,13 @@ body{
 	flex: none;
 	width: 18px;
 	height: 18px;
-	background: url('chrome-extension://__MSG_@@extension_id__/img/filters_ico.png') no-repeat center / contain;
+	background: url('chrome-extension://__MSG_@@extension_id__/img/filters_ico.svg') no-repeat center / contain;
 }
 
 input:checked + .button{ background-color: var(--active); box-shadow: 0 2px 6px rgba(234,88,12,.28); }
 input:checked + .button::after{ content: attr(data-on); }
 input:checked + .button:hover{ background-color: var(--active-strong); }
-.wrap-buttons + .wrap-buttons{ margin-top: 8px; }
+.wrap-buttons + .wrap-buttons{ margin-top: 12px; }
 
 /* ---------- Switches ---------- */
 .switch{
@@ -336,5 +337,11 @@ input:checked + .button:hover{ background-color: var(--active-strong); }
 }
 .showIcon:checked + label.icons{ opacity: 1; }
 .delete{
-	background-image: url('../img/trash.png');
+	background-image: url('../img/trash.svg');
 }
+
+.wrap-settings > *:first-child{ margin-top: 12px; }
+
+/* 折叠面板折叠时不吃外边距：放在文件末尾以覆盖前面的同名规则 */
+.wrap-settings{ margin-top: 0 !important; }
+
