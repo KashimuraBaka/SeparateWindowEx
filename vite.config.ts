@@ -69,7 +69,9 @@ const EXPLICIT_RESERVED = [
   // chrome.tabs.query / windows.getAll 的查询条件（弹窗里用到）
   'active', 'currentWindow', 'lastFocusedWindow', 'highlighted', 'pinned', 'audible', 'selected', 'discarded', 'mutedInfo',
   // 自动化冒烟测试用的诊断钩子
-  '__sepWin', 'start', 'stop', 'setMode',
+  '__sepWin', 'start', 'stop', 'setMode', 'applyBody', 'fitWhole', 'wholeState', 'hasPip', 'targetTag', 'scale', 'zoom', 'pipStats', 'mirrorOn', 'frames', 'mirrored',
+  // pipStats() 的诊断字段（自动化脚本按名字读）
+  'open', 'source', 'mirror', 'tag', 'rectW', 'rectH', 't', 'paused', 'width', 'height', 'heals',
   // 页面主世界里的可见性闸门：后台注入、页面侧实现，名字两边都要认得
   '__sepWinEventGate', 'stats', 'pumping',
   // chrome.scripting.executeScript 的参数名。这几个只在字面量里出现一次，属性改名会
@@ -208,7 +210,8 @@ async function postProcess(file: string, reserved: string[], mode: BuildMode): P
  * 变成 `'files'`（数组定义在同一个文件里，运行期仍然正确）。
  */
 const MUST_SURVIVE: Record<string, string[]> = {
-  'background.js': ['files', 'world'],
+  'background.js': ['files', 'world', 'cmd', 'arg', 'selector', 'size'],
+  'content.js': ['cmd', 'arg', 'selector', 'size'],
 };
 
 /** 这些产物是注入用的入口，缺了功能会静默失效，所以构建时核对它们的清单。 */
@@ -221,10 +224,12 @@ function assertProtocolNames(): void {
     if (!fs.existsSync(p)) { problems.push(`${file} 不存在`); continue; }
     const code = fs.readFileSync(p, 'utf8');
     for (const key of keys) {
-      /* 压缩后是 `files:` 这样的键；混淆后字符串进了数组（同一个文件内自洽） */
+      /* 三种形态都要认：`files:` 这样的键、混淆后进字符串数组的 'files'、
+         以及只作为属性访问出现的 `.previous`（跨上下文消息字段常只在读取端出现）。 */
       const ok = code.indexOf(key + ':') !== -1
         || code.indexOf(`'${key}'`) !== -1
-        || code.indexOf(`"${key}"`) !== -1;
+        || code.indexOf(`"${key}"`) !== -1
+        || code.indexOf('.' + key) !== -1;
       if (!ok) problems.push(`${file} 里 ${key} 不见了（可能被改名）`);
     }
   }

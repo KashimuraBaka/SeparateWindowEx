@@ -116,7 +116,7 @@ export function createSiteStore(local: StorageArea) {
     },
 
     /** 追加一条区域记录：同站去重，超过三条时丢最旧的。 */
-    addItem(url: string, selector: string, name: string): void {
+    addItem(url: string, selector: string, name: string, cb?: () => void): void {
       if (selector === 'BODY') return;
       const key = normUrl(url);
       local.get(key, (itemObj) => {
@@ -125,7 +125,10 @@ export function createSiteStore(local: StorageArea) {
           ? (itemObj as Record<string, SiteItems>)[key]
           : undefined;
         if (existing) {
-          if (existing.css.indexOf(selector) !== -1) return;
+          if (existing.css.indexOf(selector) !== -1) {
+            if (cb) cb();
+            return;
+          }
           items = existing;
         }
         if (items.css.length >= MAX_AREAS) {
@@ -136,6 +139,8 @@ export function createSiteStore(local: StorageArea) {
         items.icon.push(true);
         items.size.push('{}');
         setItems(key, items);
+        /* 写完再回调：调用方要紧接着按 index 写尺寸，必须等这条记录落库。 */
+        if (cb) cb();
       });
     },
 

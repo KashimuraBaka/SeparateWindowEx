@@ -194,7 +194,8 @@ var ButtonPanel = {
 			}
 		}
 		Modification.isSavedSize=!Modification.isSavedSize;
-		use('__AppPanel').saveSize(JSON.stringify(size));
+		// 一次记住：当前区域 + 尺寸 + 位置（区域未登记时后台会先登记）
+		use('__AppPanel').saveAreaState(JSON.stringify(size));
 		this.setSavedIcon(Modification.isSavedSize);
 	},
 	clickUp: function () {
@@ -533,6 +534,8 @@ var Modification = {
 	},
 	saveSelector:function(){
 		this.selector = use('Selector').getSelector(this.target);
+		// 上一级/下一级换了区域：同步给面板，尺子按钮保存时才是当前这个区域
+		use('__AppPanel').selector = this.selector;
 		use('__AppPanel').saveSelector(this.selector);
 	}
 };

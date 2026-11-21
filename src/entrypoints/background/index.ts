@@ -436,27 +436,52 @@ var cmdFromTab = {
 	saveSelector: function (arg, tab) {
 		var oldSelector = newTabs.get(tab.id).selector;
 		Storage.getAllSelectors(tab.url, function (selectors) {
-			var index = selectors.indexOf(oldSelector);
-			Storage.saveProp(tab.url, index, arg.prop);
+			var index = (selectors || []).indexOf(oldSelector);
+			// 旧区域没登记过就别按 -1 去写，否则数组上会多出一个 "-1" 属性
+			if (index > -1) Storage.saveProp(tab.url, index, arg.prop);
 			newTabs.replace(tab.id, arg.prop);
 		});
 	},
-	saveSize: function (arg, tab) {
-		let selector = newTabs.get(tab.id).selector;
+	// 保存"当前区域 + 尺寸/位置"的唯一入口。
+	//
+	// 以前是按选择器去站点记录里找槽位，找不到就什么都不做 ——
+	// 在 PiP 里翻到上一级再点保存，看着按钮变了色，其实一个字节都没存下。
+	//
+	// 现在只动"当前区域"自己的那一条：
+	//   1) 已登记 —— 覆写它的尺寸/位置；
+	//   2) 没登记 —— 先登记当前区域，再写尺寸。
+	// 绝不改写/删除别的区域：用户存的 Area 不能被"上一级"这种浏览操作悄悄换掉，
+	// 否则点站点图标弹出来的就成了父级/整页。
+	saveAreaState: function (arg, tab) {
+		if (!arg || !arg.selector) return;
+		var selector = arg.selector;
+		if (selector === 'BODY') return;
+		var report = function (added) {
+			Storage.getSize(tab.url, selector, function (size) {
+				SendMessage(tab.id, { cmd: 'isSavedSize', arg: !!size });
+			});
+			// 新登记了区域，站点图标列表要跟着刷新
+			if (added) cmdFromTab.getItems('', tab);
+		};
 		Storage.getAllSelectors(tab.url, function (selectors) {
-			let index = selectors.indexOf(selector);
-			Storage.saveProp(tab.url, index, arg.prop);
-		});
-	},
-	// Document PiP 模式没有 newTabs 记录（没有打开经典窗口），
-	// 所以保存的尺寸以内容脚本发来的选择器为键。
-	savePipSize: function (arg, tab) {
-		Storage.getAllSelectors(tab.url, function (selectors) {
-			if (!selectors) return;
-			var index = selectors.indexOf(arg.selector);
+			var list = selectors || [];
+			var index = list.indexOf(selector);
 			if (index > -1) {
-				Storage.saveProp(tab.url, index, { name: 'size', value: arg.size });
+				if (typeof arg.size === 'string') {
+					Storage.saveProp(tab.url, index, { name: 'size', value: arg.size });
+				}
+				report(false);
+				return;
 			}
+			Storage.addItem(tab.url, selector, '', function () {
+				Storage.getAllSelectors(tab.url, function (again) {
+					var i = (again || []).indexOf(selector);
+					if (i > -1 && typeof arg.size === 'string') {
+						Storage.saveProp(tab.url, i, { name: 'size', value: arg.size });
+					}
+					report(true);
+				});
+			});
 		});
 	},
 	printScr: function (arg, tab) {
