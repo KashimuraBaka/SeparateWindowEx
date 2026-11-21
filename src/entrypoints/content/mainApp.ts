@@ -27,6 +27,7 @@ var __AppPanel = {
 	},
 	updateTab: function () {
 		this._prepare(document.body);
+		this._visibilityShim(true);
 		use('Modification').do(document.body, this.selector);
 		use('ButtonPanel').add();
 	},
@@ -37,6 +38,7 @@ var __AppPanel = {
 			this._openDocPip(document.body);
 			return;
 		}
+		this._visibilityShim(true);
 		use('__BgCmd').sendCmd('apply', {
 			selector: "BODY",
 			size: {
@@ -151,6 +153,9 @@ var __AppPanel = {
 			width = Math.round(use('__Element').size.width);
 			height = Math.round(use('__Element').size.height);
 		}
+		// 经典窗口同样会切标签页/最小化，弹幕一样会停：
+		// 这里也装上可见性闸门（此时没有 PiP 窗口，帧时钟退回原生）。
+		this._visibilityShim(true);
 		use('__BgCmd').sendCmd('apply', {
 			selector: this.selector,
 			size: {
@@ -304,8 +309,9 @@ var __AppPanel = {
 			use('__BgCmd').sendCmd(on ? 'pipKeepAwake' : 'pipReleaseAwake', {});
 		} catch (e) { }
 	},
-	// PiP 期间告诉页面"你仍可见"，否则站点在标签页隐藏后
-	// 会立刻暂停弹幕/覆盖层渲染。
+	// PiP 期间告诉页面"你仍可见"，否则站点在标签页隐藏后会
+	// 立刻暂停弹幕/覆盖层渲染（详见 core/gate.ts：事件、状态、帧时钟三条路径）。
+	// 经典窗口没有 PiP 窗口可借用，但事件与状态两层照样生效。
 	_visibilityShim: function (on) {
 		try {
 			use('__BgCmd').sendCmd('pipVisibilityShim', { on: !!on });
@@ -912,6 +918,7 @@ var __AppPanel = {
 	},
 	cancel: function () {
 		use('Selector').restoreURL();
+		this._visibilityShim(false);
 		use('__BgCmd').sendCmd('cancel', {});
 		use('CmdToFrame').remove();
 		use('Modification').cancel();

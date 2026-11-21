@@ -41,6 +41,9 @@ const OUTPUTS: Array<{ name: string; entry: string; kind: OutputKind }> = [
   { name: 'player', entry: 'entrypoints/injected/player.ts', kind: 'bundle' },
   { name: 'popup', entry: 'entrypoints/popup/index.ts', kind: 'classic' },
   { name: 'iframe', entry: 'entrypoints/injected/iframe.ts', kind: 'classic' },
+  // 页面主世界的可见性闸门：成对注入（装上 / 拆掉），见 entrypoints/injected/gateOn.ts
+  { name: 'gateOn', entry: 'entrypoints/injected/gateOn.ts', kind: 'bundle' },
+  { name: 'gateOff', entry: 'entrypoints/injected/gateOff.ts', kind: 'bundle' },
 ];
 
 // 属性改名必须避开的名称：一是跨文件/跨上下文的协议字段（消息封装、chrome.* 参数、
@@ -67,6 +70,12 @@ const EXPLICIT_RESERVED = [
   'active', 'currentWindow', 'lastFocusedWindow', 'highlighted', 'pinned', 'audible', 'selected', 'discarded', 'mutedInfo',
   // 自动化冒烟测试用的诊断钩子
   '__sepWin', 'start', 'stop', 'setMode',
+  // 页面主世界里的可见性闸门：后台注入、页面侧实现，名字两边都要认得
+  '__sepWinEventGate', 'stats', 'pumping',
+  // chrome.scripting.executeScript 的参数名。这几个只在字面量里出现一次，属性改名会
+  // 连它们一起改掉 —— 症状极其隐蔽：注入请求里没有 func/world，扩展看起来一切正常，
+  // 页面主世界里其实什么都没发生（曾经的"弹幕停住"就是这么来的）。
+  'func', 'args', 'world', 'files', 'injectImmediately',
 ];
 
 /** 扫描源码里所有以字符串出现的合法标识符，加入保留名单。 */
@@ -186,6 +195,47 @@ async function postProcess(file: string, reserved: string[], mode: BuildMode): P
   return { before: Buffer.byteLength(code), after: Buffer.byteLength(out) };
 }
 
+/**
+ * 压缩后的协议名守卫。
+ *
+ * `files` / `world` 这类名字只在 chrome.scripting 的调用字面量里出现一次，
+ * 属性改名会把它们一起改掉，而 chrome 对认不出的键是"静默忽略"：
+ * 注入请求照发、回调照回、扩展一切正常，只是页面主世界里什么都没发生。
+ * 这条静默失败曾经让可见性拦截完全不生效（弹幕因此在切走标签页后停住），
+ * 所以压缩之后必须回来核对一遍。
+ *
+ * 两种产物形态都要认：压缩后是 `files:` 这样的键；混淆后字符串进了数组，
+ * 变成 `'files'`（数组定义在同一个文件里，运行期仍然正确）。
+ */
+const MUST_SURVIVE: Record<string, string[]> = {
+  'background.js': ['files', 'world'],
+};
+
+/** 这些产物是注入用的入口，缺了功能会静默失效，所以构建时核对它们的清单。 */
+const REQUIRED_OUTPUTS = ['gateOn.js', 'gateOff.js'];
+
+function assertProtocolNames(): void {
+  const problems: string[] = [];
+  for (const [file, keys] of Object.entries(MUST_SURVIVE)) {
+    const p = path.join(DIST, 'js', file);
+    if (!fs.existsSync(p)) { problems.push(`${file} 不存在`); continue; }
+    const code = fs.readFileSync(p, 'utf8');
+    for (const key of keys) {
+      /* 压缩后是 `files:` 这样的键；混淆后字符串进了数组（同一个文件内自洽） */
+      const ok = code.indexOf(key + ':') !== -1
+        || code.indexOf(`'${key}'`) !== -1
+        || code.indexOf(`"${key}"`) !== -1;
+      if (!ok) problems.push(`${file} 里 ${key} 不见了（可能被改名）`);
+    }
+  }
+  for (const file of REQUIRED_OUTPUTS) {
+    if (!fs.existsSync(path.join(DIST, 'js', file))) problems.push(`${file} 没有产出`);
+  }
+  if (problems.length) {
+    throw new Error('属性改名/产物缺失，跨上下文协议可能已经失效：\n  ' + problems.join('\n  '));
+  }
+}
+
 /** 完整构建：清理 → 拷贝静态资源 → 各入口产物 → CSS → 压缩/混淆。 */
 async function build(mode: BuildMode): Promise<void> {
   fs.rmSync(DIST, { recursive: true, force: true });
@@ -215,6 +265,7 @@ async function build(mode: BuildMode): Promise<void> {
     if (mode !== 'dev') console.log(`  ${file}: ${r.before} -> ${r.after}`);
   }
   if (mode !== 'dev') console.log(`  total ${before} -> ${after} bytes`);
+  assertProtocolNames();
   console.log(`Built dist/ (${mode}): ${files.length} JS, ${fs.readdirSync(path.join(DIST, 'css')).length} CSS`);
 }
 

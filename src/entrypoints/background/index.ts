@@ -362,44 +362,8 @@ var Bookmarks = {
 // tabId -> { discardable }：记录哪些标签页的 PiP 窗口持有屏幕唤醒锁。
 var keepAwakeTabs = {};
 
-// 在页面主世界运行（由 chrome.scripting.executeScript 注入），因此
-// 必须自包含。PiP 窗口打开期间告诉页面"你可见"：
-// 站点常在 visibilitychange 时暂停弹幕/覆盖层渲染，否则 PiP 里的副本
-// 会僵住，尽管它自己的窗口还显示在屏幕上。
-function sepWinVisibilityShim(on) {
-	var KEY = '__sepWinVisShim';
-	var st = window[KEY];
-	if (on) {
-		if (st) return 'already';
-		st = window[KEY] = { descs: [], blocks: [] };
-		try {
-			st.descs.push(['hidden', Object.getOwnPropertyDescriptor(Document.prototype, 'hidden')]);
-			st.descs.push(['visibilityState', Object.getOwnPropertyDescriptor(Document.prototype, 'visibilityState')]);
-			Object.defineProperty(Document.prototype, 'hidden', {
-				configurable: true, get: function () { return false; }
-			});
-			Object.defineProperty(Document.prototype, 'visibilityState', {
-				configurable: true, get: function () { return 'visible'; }
-			});
-		} catch (e) { /* keep going: the event block below is the important part */ }
-		var stop = function (e) { e.stopImmediatePropagation(); };
-		['visibilitychange', 'webkitvisibilitychange'].forEach(function (type) {
-			window.addEventListener(type, stop, true);
-			st.blocks.push([type, stop]);
-		});
-		return 'on';
-	}
-	if (!st) return 'off';
-	try {
-		st.blocks.forEach(function (b) { window.removeEventListener(b[0], b[1], true); });
-		st.descs.forEach(function (d) {
-			if (d[1]) Object.defineProperty(Document.prototype, d[0], d[1]);
-			else delete Document.prototype[d[0]];
-		});
-	} catch (e) { }
-	delete window[KEY];
-	return 'off';
-}
+// 可见性闸门本体在 core/gate.ts，由 js/gateOn.js / js/gateOff.js 注入到页面主世界
+// （见下面的 pipVisibilityShim）：页面主世界里必须自包含，所以单独成模块，也便于单测。
 
 // 在页面主世界运行。播放器页面是按"页面视口"计算覆盖层尺寸（含弹幕字号）的，
 // 而 PiP 模式下页面视口并不改变，副本就会沿用旧字号。
@@ -511,17 +475,15 @@ var cmdFromTab = {
 	// 置顶窗口就没意义了。因此保持屏幕唤醒，
 	// 并在 PiP 窗口打开期间把该标签页标记为不自动丢弃。
 	pipKeepAwake: function (arg, tab) {
-		try {
-			chrome.power.requestKeepAwake('display');
-			keepAwakeTabs[tab.id] = keepAwakeTabs[tab.id] || { discardable: null };
-			chrome.tabs.get(tab.id, function (t) {
-				if (chrome.runtime.lastError || !t) return;
-				if (!keepAwakeTabs[tab.id]) return;
-				keepAwakeTabs[tab.id].discardable = t.autoDiscardable !== false;
-				if (t.autoDiscardable === false) return;
-				chrome.tabs.update(tab.id, { autoDiscardable: false });
-			});
-		} catch (e) { /* power API unavailable */ }
+		try { chrome.power.requestKeepAwake('display'); } catch (e) { /* 电源接口不可用 */ }
+		keepAwakeTabs[tab.id] = keepAwakeTabs[tab.id] || { discardable: null };
+		chrome.tabs.get(tab.id, function (t) {
+			if (chrome.runtime.lastError || !t) return;
+			if (!keepAwakeTabs[tab.id]) return;
+			keepAwakeTabs[tab.id].discardable = t.autoDiscardable !== false;
+			if (t.autoDiscardable === false) return;
+			chrome.tabs.update(tab.id, { autoDiscardable: false });
+		});
 	},
 	pipReleaseAwake: function (arg, tab) {
 		var saved = keepAwakeTabs[tab.id];
@@ -533,20 +495,26 @@ var cmdFromTab = {
 			chrome.tabs.update(tab.id, { autoDiscardable: true });
 		}
 	},
-	// 播放器页面会在 visibilitychange 时停止弹幕/覆盖层渲染，
-	// 导致标签页隐藏或窗口最小化后 PiP 副本立即僵住。
-	// 在页面主世界拦截该事件，可以让站点在 PiP 打开期间继续出弹幕，
-	// 关闭时再解除。
+	// 播放器在页面不可见时会停掉弹幕：既监听 document 的 visibilitychange，
+	// 也直接读 document.hidden，循环本身还依赖 requestAnimationFrame。
+	// 闸门（core/gate.ts）在页面主世界里把这三条路径同时按住，
+	// 关闭置顶窗口时再整体还原。
+	// 注入的是 js/gateOn.js / js/gateOff.js 两个文件：文件注入不经过函数序列化，
+	// 压缩/混淆都自洽（用 func: 注入时字符串数组会留在文件作用域，进页面就引用不到）。
 	pipVisibilityShim: function (arg, tab) {
 		try {
 			chrome.scripting.executeScript({
 				target: { tabId: tab.id, allFrames: false },
 				world: 'MAIN',
-				func: sepWinVisibilityShim,
-				args: [!!arg.on]
-			}, function () { void chrome.runtime.lastError; });
+				files: [arg && arg.on ? 'js/gateOn.js' : 'js/gateOff.js']
+			}, function () {
+				// 受限页面（edge://、应用商店等）注入会失败，页面只是退回原生行为。
+				if (chrome.runtime.lastError) {
+					console.info('[SepWin] visibility gate:', chrome.runtime.lastError.message);
+				}
+			});
 		} catch (e) {
-			console.warn('[SepWin] visibility shim failed:', e);
+			console.warn('[SepWin] visibility gate failed:', e);
 		}
 	},
 	// 把 PiP 窗口尺寸作为页面视口上报，让视口驱动的尺寸计算（弹幕
