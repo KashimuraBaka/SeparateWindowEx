@@ -200,8 +200,10 @@ var Panel = {
 					let left = null,
 						top = null,
 						position = Panel.cfg.position,
-						width = size.width > 150 ? size.width : 150,
-						height = size.height > 150 ? size.height : 150,
+						// 经典窗口同样不裁剪尺寸：区域多大（或上次存了多大）就开多大，
+						// 以前小于 150 会被抬到 150，存的尺寸也用不上。
+						width = Math.max(1, Math.round(size.width) || 1),
+						height = Math.max(1, Math.round(size.height) || 1),
 						aspect = width / height;
 
 					if (Panel.cfg.size.width !== 'Auto') {

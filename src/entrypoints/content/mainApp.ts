@@ -212,16 +212,21 @@ var __AppPanel = {
 			this._wholeNaturalW = Math.max(document.body.scrollWidth | 0, document.body.offsetWidth | 0, 0);
 		}
 		var isBody = (target == document.body);
-		var width = isBody ? Math.min(window.innerWidth, 1280)
-			: Math.max(160, Math.round(use('__Element').size.width));
-		var height = isBody ? Math.min(window.innerHeight, 800)
-			: Math.max(160, Math.round(use('__Element').size.height));
-		// 如果这个选择器存过尺寸，就复用。
+		// 尺寸只取"区域自己多大 / 上次存了多少"，**不做最大最小裁剪**：
+		// 以前整页模式被压在 1280×800、普通区域被抬到至少 160，
+		// 用户存了更大的尺寸也用不上（开出来和存的完全不一样）。
+		var width = isBody ? Math.round(window.innerWidth)
+			: Math.round(use('__Element').size.width);
+		var height = isBody ? Math.round(window.innerHeight)
+			: Math.round(use('__Element').size.height);
+		// 这个区域之前存过尺寸就用它（saveAreaState 存的就是保存时窗口的尺寸）。
 		var saved = this._sizes[this.selector];
-		if (saved && saved.width > 80 && saved.height > 80) {
+		if (saved && saved.width >= 1 && saved.height >= 1) {
 			width = Math.round(saved.width);
 			height = Math.round(saved.height);
 		}
+		width = Math.max(1, width || 0);
+		height = Math.max(1, height || 0);
 		// 记住请求时的尺寸：requestWindow() 刚返回时 PiP 窗口还没有布局，
 		// innerWidth/innerHeight 会是 0。
 		this._pipRequested = { w: width, h: height };
@@ -571,11 +576,25 @@ var __AppPanel = {
 			self._stopMirror();
 			self._restorePip();
 		});
+		// 说明：PiP 窗口的**实际**尺寸由浏览器决定，我们只能"请求"。
+		//  - requestWindow({width,height}) 的尺寸提示会被忽略（实测开出来是主窗口视口大小）；
+		//  - PiP 文档里 resizeTo() 需要用户激活（"resizeTo() requires user activation
+		//    in document picture-in-picture"），强行在首次交互时调用还会得到一个
+		//    谁都没要求的尺寸（实测 1484×830 变成 962×538）。
+		// 所以这里不再主动改窗口大小：区域内容始终按当前窗口尺寸自适应（见 _fitPipHost），
+		// 窗口想多大由用户拖、或由浏览器决定；"跟随上次保存的大小"只体现在请求值上。
 		// 用户拖动改变 PiP 窗口大小时，保持区域跟随。
 		pipWin.addEventListener('resize', function () {
-			self._fitPipHost();
-			self._fitWholePage();
-			self._viewportShim(true, pipWin.innerWidth, pipWin.innerHeight);
+			// resize 每帧可能触发多次：合并到一帧一次，避免重复重排播放器
+			if (self._pipResizeRaf) return;
+			var raf = pipWin.requestAnimationFrame || window.requestAnimationFrame;
+			self._pipResizeRaf = raf(function () {
+				self._pipResizeRaf = 0;
+				if (!self._pipWin || self._pipWin.closed) return;
+				self._fitPipHost();
+				self._fitWholePage();
+				self._viewportShim(true, pipWin.innerWidth, pipWin.innerHeight);
+			});
 		});
 	},
 	// 在 PiP 窗口里显示 `node`。含 <video> 的节点走"镜像"：
@@ -750,34 +769,33 @@ var __AppPanel = {
 	// 上下会留黑边。如果弹幕层铺满整个窗口，弹幕就会飞到黑边上；所以这里按
 	// 视频尺寸算出画面矩形（居中、保持比例），把弹幕层钉在这个矩形上。
 	// 每次窗口尺寸变化都重算，内容始终随容器自适应。
+	// 播放器内部各层铺满宿主。
+	//
+	// 只注入一次、**不随窗口尺寸重写**：这条样式表覆盖播放器内部结构，
+	// 每改一次就是一次全量样式重算 + 重排；拖动 PiP 窗口时 resize 事件
+	// 每帧都来，重写它会把画面拖卡（实测拖动过程明显掉帧）。
+	// 规则里全是 100%，本身就跟尺寸无关，注入一次即可。
 	_fitPipInner: function () {
 		var win = this._pipWin;
 		var doc = win && win.document;
-		if (!doc) return;
-		var vw = win.innerWidth || 0, vh = win.innerHeight || 0;
-		if (!vw || !vh) return;
-		var video = this._pipVideo;
-		var srcW = (video && video.videoWidth) || 16;
-		var srcH = (video && video.videoHeight) || 9;
-		var scale = Math.min(vw / srcW, vh / srcH);
-		var picW = Math.round(srcW * scale);
-		var picH = Math.round(srcH * scale);
-		var picX = Math.max(0, Math.round((vw - picW) / 2));
-		var picY = Math.max(0, Math.round((vh - picH) / 2));
-		var st = doc.getElementById('__sepWinPipFit');
-		if (!st) {
-			st = doc.createElement('style');
-			st.id = '__sepWinPipFit';
-			doc.head.appendChild(st);
-		}
+		if (!doc || !doc.head) return;
+		if (doc.getElementById('__sepWinPipFit')) return;
+		var st = doc.createElement('style');
+		st.id = '__sepWinPipFit';
 		st.textContent = [
+			// 镜像画布按容器**重新布局**成 100%，而不是沿用源视频元素自己的尺寸
+			// 再被拉伸（源 600×600、窗口 1200×1200 时那样就是糊/马赛克）。
+			'#__sepWinPipWrap #__sepWinPipVideo{position:absolute!important;left:0!important;top:0!important;width:100%!important;height:100%!important;object-fit:contain!important;image-rendering:auto!important}',
 			// 结构层铺满窗口（站点自己的 CSS 会按新尺寸重排）
 			'#__sepWinPipWrap .bpx-player-video-area,#__sepWinPipWrap .bpx-player-video-perch,#__sepWinPipWrap .bpx-player-video-wrap{width:100%!important;height:100%!important}',
 			'#__sepWinPipWrap .bpx-player-primary-area,#__sepWinPipWrap .bpx-player-container{width:100%!important;height:100%!important}',
-			// 各类弹幕层都钉在画面矩形上（它们各自是独立的一层，直接给像素框最稳）
-			'#__sepWinPipWrap .bpx-player-row-dm-wrap,#__sepWinPipWrap .bpx-player-adv-dm-wrap,#__sepWinPipWrap .bpx-player-cmd-dm-wrap,#__sepWinPipWrap .bpx-player-bas-dm-wrap{position:absolute!important;left:' + picX + 'px!important;top:' + picY + 'px!important;width:' + picW + 'px!important;height:' + picH + 'px!important}'
+			// 弹幕层必须显式给尺寸：它们是绝对定位且没有内联宽高，父级变 100% 后
+			// 会塌成 0×0（实测 55 个弹幕元素全都没有尺寸，画面上一片空）。
+			// 用 100% 而不是按画面矩形写像素，这样规则与窗口尺寸无关，
+			// 注入一次就够，拖动窗口时不必重写样式表（重写会明显卡顿）。
+			'#__sepWinPipWrap .bpx-player-row-dm-wrap,#__sepWinPipWrap .bpx-player-adv-dm-wrap,#__sepWinPipWrap .bpx-player-cmd-dm-wrap,#__sepWinPipWrap .bpx-player-bas-dm-wrap{position:absolute!important;left:0!important;top:0!important;width:100%!important;height:100%!important}'
 		].join('\n');
-		this._pipPic = { x: picX, y: picY, w: picW, h: picH };
+		doc.head.appendChild(st);
 	},	// 搬走的区域如果不带样式表，会丢掉页面全部样式。
 	// 把页面的样式表补进 PiP 文档。**必须是增量的**：
 	// 播放器/弹幕的 CSS 是站点在播放开始后动态注入的（实测页面最终有 49 个
@@ -900,7 +918,7 @@ var __AppPanel = {
 		if (canUp) { up.classList.remove('disable'); } else { up.classList.add('disable'); }
 		if (canDown) { dwn.classList.remove('disable'); } else { dwn.classList.add('disable'); }
 
-		var saved = !!this._sizes[st.selector];
+		var saved = !!this._sizes[this.selector || st.selector];
 		save.classList.remove(saved ? 'btn_save_off' : 'btn_save_on');
 		save.classList.add(saved ? 'btn_save_on' : 'btn_save_off');
 		save.setAttribute('title',
@@ -913,6 +931,10 @@ var __AppPanel = {
 		var st = this._pip;
 		if (!st || !this._pipWin) return;
 		var sel = st.selector;
+		// 键必须和 _openDocPip 查的是同一个：那边用 this.selector（点选的目标），
+		// st.selector 是搬进去的容器（点视频时是播放器 div）。两者不一致时
+		// 存了也永远查不到 —— 表现就是"存了尺寸，再打开还是原来大小"。
+		sel = this.selector || sel;
 		var win = this._pipWin;
 		if (this._sizes[sel]) {
 			delete this._sizes[sel];

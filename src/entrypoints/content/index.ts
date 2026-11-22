@@ -24,7 +24,24 @@ import { use } from './runtime';
 	stop: () => use('__AppPanel').stop(),
 	selector: () => use('__AppPanel').selector,
 	setMode: (pip: boolean) => { use('__AppPanel').cfg.useDocPip = !!pip; },
-	// 按整页（BODY）方式弹出：排障时用来复现"整页"那条路径。
+	// 读当前区域已保存的尺寸（排障/自动化断言用）
+	savedSize: () => {
+		const panel: any = use('__AppPanel');
+		return panel._sizes[panel.selector] || null;
+	},
+	// 保存当前区域尺寸（等价于点 PiP 工具栏里的"保存尺寸"按钮）。
+	// 自动化里没法点 PiP 窗口内的按钮（它没有 CDP target），用这个钩子代替。
+	saveAreaSize: () => {
+		const panel: any = use('__AppPanel');
+		const win: any = panel._pipWin;
+		if (!win || win.closed) return null;
+		const key = panel.selector || (panel._pip && panel._pip.selector);
+		// _pipToggleSave 是"存/清"开关；自动化里要的是"确保已保存"
+		if (!panel._sizes[key]) {
+			try { panel._pipToggleSave(); } catch (e) { }
+		}
+		return panel._sizes[key] || null;
+	},	// 按整页（BODY）方式弹出：排障时用来复现"整页"那条路径。
 	applyBody: () => {
 		// 整页已经弹出时 document.body 是 null：直接忽略，别抛错
 		const body = document.body;
@@ -65,6 +82,8 @@ import { use } from './runtime';
 				mp: panel._mirror ? { calls: panel._mirror.frames, err: panel._mirror.errors, restarts: panel._mirror.restarts } : null,
 				heals: panel._heals | 0,
 				mirrored: !!(view && src),
+				// 打开时请求的窗口尺寸（区域大小或上次保存的尺寸），排障用
+				requested: panel._pipRequested || null,
 				source: src ? {
 					t: Math.round(src.currentTime * 100) / 100,
 					paused: !!src.paused,

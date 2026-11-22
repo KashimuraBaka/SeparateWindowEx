@@ -24,7 +24,10 @@ export interface FrameHost {
   cancelAnimationFrame(handle: number): void;
   setInterval(handler: () => void, timeout: number): number;
   clearInterval(handle: number): void;
+  setTimeout(handler: () => void, timeout: number): number;
+  clearTimeout(handle: number): void;
   readonly innerWidth: number;
+  readonly innerHeight: number;
   readonly devicePixelRatio: number;
 }
 
@@ -42,6 +45,16 @@ export class VideoMirror {
   private targetH = 0;
   private srcW = 0;
   private srcH = 0;
+  /** 上次算后备尺寸时的宿主尺寸（用来发现窗口被拖动/缩放）。 */
+  private hostW = -1;
+  private hostH = -1;
+  /** 拖动窗口时的待应用尺寸：尺寸稳定后才重算（每帧重建后备缓冲是卡顿主因）。 */
+  private pendingW = 0;
+  private pendingH = 0;
+  private lastSizeChangeAt = 0;
+  /** 每帧看到的窗口尺寸（用来区分「还在拖」和「已经停下」）。 */
+  private lastSeenW = -1;
+  private lastSeenH = -1;
   private fpsWindowStart = 0;
   private fpsWindowCount = 0;
 
@@ -113,6 +126,8 @@ export class VideoMirror {
     this.fpsWindowCount = 0;
     this.srcW = 0;
     this.srcH = 0;
+    this.hostW = -1;
+    this.hostH = -1;
     this.rafStamp = 0;
     // 兜底：rAF 真的停摆时才补帧，不参与每帧调度
     this.backstopHandle = host.setInterval(() => {
@@ -146,6 +161,8 @@ export class VideoMirror {
     }
     this.rafHandle = 0;
     this.backstopHandle = 0;
+    this.pendingW = 0;
+    this.pendingH = 0;
   }
 
   private readonly tick = (): void => {
@@ -175,34 +192,74 @@ export class VideoMirror {
     if (!video || !video.videoWidth) return false;
     const ctx = this.ctx;
     if (!ctx) return false;
+    // 源换了分辨率，或者**宿主窗口尺寸变了**，都要重算后备尺寸。
+    // 只认源变化是不够的：PiP 窗口从 1084 拖到 1536 时后备尺寸会停在
+    // 1084×610，画面被整体拉伸 —— 看起来就是马赛克。
+    const winW = this.host.innerWidth || 0;
+    const winH = this.host.innerHeight || 0;
+    const now = Date.now();
     if (video.videoWidth !== this.srcW || video.videoHeight !== this.srcH) {
       this.srcW = video.videoWidth;
       this.srcH = video.videoHeight;
+      this.pendingW = 0;
+      this.pendingH = 0;
+      this.lastSeenW = winW;
+      this.lastSeenH = winH;
       this.computeTargetSize();
+      this.resizeCanvas();
+      return this.drawFrame(ctx, video);
     }
-    if (this.view.width !== this.targetW || this.view.height !== this.targetH) {
-      this.view.width = this.targetW;
-      this.view.height = this.targetH;
+    // 拖动窗口时尺寸每帧都在变。每帧都改 canvas.width/height，等于每帧重建
+    // 一次后备缓冲（GPU 重新分配 + 内容作废），拖动会明显卡；所以只记下尺寸，
+    // 等它**稳定 120ms** 后再一次性重算。这期间画布按 CSS 等比缩放，
+    // 视觉上只是短暂略软。
+    if (winW !== this.lastSeenW || winH !== this.lastSeenH) {
+      this.lastSeenW = winW;
+      this.lastSeenH = winH;
+      this.pendingW = winW;
+      this.pendingH = winH;
+      this.lastSizeChangeAt = now;
+    } else if (this.pendingW && now - this.lastSizeChangeAt > 120) {
+      this.pendingW = 0;
+      this.pendingH = 0;
+      this.computeTargetSize();
+      this.resizeCanvas();
     }
+    return this.drawFrame(ctx, video);
+  }
+
+  private drawFrame(ctx: CanvasRenderingContext2D, video: HTMLVideoElement): boolean {
     ctx.drawImage(video, 0, 0, this.targetW, this.targetH);
     this.drawn += 1;
     this.sampleFps();
     return true;
   }
 
+  /** 把后备尺寸写到画布上。会重建后备缓冲，所以只在必要时（源变化、尺寸稳定后）调用。 */
+  private resizeCanvas(): void {
+    if (this.view.width !== this.targetW || this.view.height !== this.targetH) {
+      this.view.width = this.targetW;
+      this.view.height = this.targetH;
+    }
+  }
+
   /**
-   * 后备尺寸不必等于源分辨率：取"窗口尺寸 × 像素比"就够清晰，
-   * 但能挡住 4K 源在 144Hz 下每秒上 G 像素的填充量（高帧率下的卡顿来源之一）。
+   * 后备尺寸跟着**窗口大小**走：把源按比例铺进窗口，需要多少像素就渲染多少像素。
+   *
+   *  - 窗口比源小：按窗口渲染（4K 源在 1184 宽的窗口里只画 1184×666，
+   *    不会在 144Hz 下白烧上 G 像素）；
+   *  - 窗口比源大：直接按窗口渲染，放大由 drawImage 一次完成；
+   *    以前是"封顶在源分辨率、再由合成器拉伸"，等于二次重采样，更糊。
    */
   private computeTargetSize(): void {
     const dpr = Math.min(this.host.devicePixelRatio || 1, 2);
-    const cap = Math.round((this.host.innerWidth || 0) * dpr);
-    let width = this.srcW;
-    let height = this.srcH;
-    if (cap > 0 && width > cap) {
-      width = cap;
-      height = Math.max(1, Math.round((cap * this.srcH) / this.srcW));
-    }
+    this.hostW = this.host.innerWidth || 0;
+    this.hostH = this.host.innerHeight || 0;
+    const winW = this.hostW || this.srcW;
+    const winH = this.hostH || this.srcH;
+    const fit = Math.min(winW / this.srcW, winH / this.srcH);
+    const width = Math.max(1, Math.round(this.srcW * fit * dpr));
+    const height = Math.max(1, Math.round(this.srcH * fit * dpr));
     this.targetW = width;
     this.targetH = height;
   }
