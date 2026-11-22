@@ -69,7 +69,7 @@ const EXPLICIT_RESERVED = [
   // chrome.tabs.query / windows.getAll 的查询条件（弹窗里用到）
   'active', 'currentWindow', 'lastFocusedWindow', 'highlighted', 'pinned', 'audible', 'selected', 'discarded', 'mutedInfo',
   // 自动化冒烟测试用的诊断钩子
-  '__sepWin', 'start', 'stop', 'setMode', 'applyBody', 'fitWhole', 'wholeState', 'hasPip', 'targetTag', 'scale', 'zoom', 'pipStats', 'mirrorOn', 'frames', 'mirrored',
+  '__sepWin', 'start', 'stop', 'setMode', 'applyBody', 'fitWhole', 'wholeState', 'hasPip', 'targetTag', 'scale', 'zoom', 'pipStats', 'mirrorOn', 'frames', 'fps', 'kind', 'idleMs', 'rafAge', 'srcFrames', 'mp', 'calls', 'dirty', 'err', 'restarts', 'mirrored',
   // pipStats() 的诊断字段（自动化脚本按名字读）
   'open', 'source', 'mirror', 'tag', 'rectW', 'rectH', 't', 'paused', 'width', 'height', 'heals',
   // 页面主世界里的可见性闸门：后台注入、页面侧实现，名字两边都要认得

@@ -1,5 +1,8 @@
 // @ts-nocheck -- 遗留文件体：模块边界已就位，类型迁移留到后续步骤。
 import { register, use } from './runtime';
+import { VideoMirror } from './mirror';
+import { TargetResolver } from './selection';
+import { WholePageFitter } from './wholePage';
 
 
 /**
@@ -11,68 +14,24 @@ var __AppPanel = {
 	scroll: 0,
 	target: {},
 	selector: '',
-	// 站点常拿一层"透明拦截层"盖住播放器（B 站是 geetest 验证码浮层）：
-	// 它没有可见内容、却总在最上面，点哪儿选中的都是它 —— 弹出后自然拿不到
-	// 播放器和弹幕层，保存下来的区域也成了这条垃圾记录。选区域时必须穿透它。
-	_isGhostLayer: function (el) {
-		if (!el || el.nodeType !== 1) return false;
-		if (el === document.body || el === document.documentElement) return false;
-		var cs;
-		try { cs = window.getComputedStyle(el); } catch (e) { return false; }
-		if (!cs) return false;
-		if (cs.display === 'none' || cs.visibility === 'hidden') return true;
-		if (parseFloat(cs.opacity) === 0) return true;
-		var r = el.getBoundingClientRect();
-		return r.width < 2 || r.height < 2;
-	},
-	// 光标下面有 <video>、但命中的元素并不是它（而是盖在上面的浮层，比如
-	// 验证码层 geetest_bg）时，用户想点的显然是播放器 —— 取视频外面那层容器，
-	// 这样弹出来的窗口里才有弹幕层和播放控件。
-	_videoHostFor: function (stack, target) {
-		if (!stack || !stack.length) return null;
-		for (var i = 0; i < stack.length; i++) {
-			var v = stack[i];
-			if (!v || v.tagName !== 'VIDEO') continue;
-			if (v === target || v.contains(target)) return null;	// 就点在视频里：维持"只镜像视频"
-			var n = v;
-			for (var j = 0; j < 4 && n; j++) {
-				n = n.parentElement;
-				if (!n || n === document.body || n === document.documentElement) break;
-				var r = n.getBoundingClientRect();
-				if (r.width >= 200 && r.height >= 120) return n;
-			}
-			return null;
+	// 镜像后端（canvas 逐帧绘制；stream 接力实测不如它，已移除）
+	_mirrorKind: 'canvas',
+	_mirrorOn: false,
+	// 选中解析（透明拦截层穿透、浮层下取播放器容器）见 selection.ts，
+	// 这里只保留给老调用点的同名入口。
+	_resolver: function () {
+		if (!this._targetResolver) {
+			this._targetResolver = new TargetResolver(document, {
+				hideOverlay: function () { use('__Element').hideWrapper(); },
+				showOverlay: function () { use('__Element').showWrapper(); }
+			});
 		}
-		return null;
+		return this._targetResolver;
 	},
-	// 统一入口：把"光标下的元素"解析成用户真正想选的那个。
-	_resolveTarget: function (x, y, hovered) {
-		var stack = document.elementsFromPoint ? (document.elementsFromPoint(x, y) || []) : null;
-		if (!hovered || this._isGhostLayer(hovered)) return this._getFromPoint(x, y);
-		var host = this._videoHostFor(stack, hovered);
-		return host || hovered;
-	},
-	_getFromPoint: function (x, y) {
-		use('__Element').hideWrapper();
-		var target = document.elementFromPoint(x, y);
-		var stack = document.elementsFromPoint ? (document.elementsFromPoint(x, y) || []) : null;
-		// 命中的是不可见拦截层：从下往上取第一个真实元素（跳过扩展自己的覆盖层）
-		if (this._isGhostLayer(target) && stack) {
-			for (var i = stack.length - 1; i >= 0; i--) {
-				var el = stack[i];
-				if (!el) continue;
-				if (el.id && el.id.indexOf('__') === 0) continue;
-				if (this._isGhostLayer(el)) continue;
-				target = el;
-				break;
-			}
-		}
-		// 点在被浮层盖住的播放器上：换成视频外面那层容器
-		var host = this._videoHostFor(stack, target);
-		if (host) target = host;
-		use('__Element').showWrapper();
-		return target;
-	},
+	_isGhostLayer: function (el) { return this._resolver().isGhostLayer(el); },
+	_videoHostFor: function (stack, target) { return this._resolver().videoHostFor(stack, target); },
+	_getFromPoint: function (x, y) { return this._resolver().fromPoint(x, y); },
+	_resolveTarget: function (x, y, hovered) { return this._resolver().resolve(x, y, hovered); },
 	_prepare: function (target) {
 		use('Selector').href = document.location.href;
 		this.selector = use('Selector').getSelector(target);
@@ -177,6 +136,9 @@ var __AppPanel = {
 		}
 	},
 	apply: function (target) {
+		/* 整页弹出之后页面里的 document.body 已经是 null（被搬进置顶窗口了），
+		   此时再触发一次"整页弹出"没有意义，直接忽略，别让 null 一路穿到 getSelector。 */
+		if (!target || !target.tagName) return;
 		if (target.tagName == 'IFRAME') {
 			use('__BgCmd').sendCmd('loadToFrame', {});
 			setTimeout(function () {
@@ -241,6 +203,13 @@ var __AppPanel = {
 		if (!this._hasActivation()) {
 			this._promptActivate(target);
 			return;
+		}
+		// 整页模式：趁 body 还在页面里、布局正常，先记下它的自然宽度。
+		// 搬进 PiP 之后（还可能带着上一轮的 zoom）再量就不准了，
+		// 实测会量到几百像素宽、几万像素高的失真值。
+		this._wholeNaturalW = 0;
+		if (target && target.tagName === 'BODY') {
+			this._wholeNaturalW = Math.max(document.body.scrollWidth | 0, document.body.offsetWidth | 0, 0);
 		}
 		var isBody = (target == document.body);
 		var width = isBody ? Math.min(window.innerWidth, 1280)
@@ -330,7 +299,39 @@ var __AppPanel = {
 		if (!/object-fit/i.test(css)) css += ';object-fit:contain';
 		return css;
 	},
+	// 画面节点：canvas 逐帧 drawImage（实测这张就是最稳的一条：
+	// 60 帧源 → 不同画面 60.5/s、p50=15ms、p90=21ms，与页面原生播放 58~60/s、
+	// p50=14ms、p90=21ms 基本一致）。
+	// 曾试过 captureStream → MediaStreamTrackProcessor → MediaStreamTrackGenerator
+	// → PiP 里的 <video>（交给浏览器视频管线合成），但在背压下会丢帧：
+	// 58.3/s、p99=35ms、max=42ms，反而不如 canvas，故不采用。
 	_createMirror: function (video, className, cssText) {
+		var view = this._createCanvasMirror(video, className, cssText);
+		this._mirrorKind = 'canvas';
+		return view;
+	},
+	// 画面镜像交给 VideoMirror（class 实现见 mirror.ts）。
+	_startMirror: function (video, view) {
+		this._stopMirror();
+		var win = this._pipWin;
+		if (!win || !view) return;
+		var mirror = new VideoMirror(win, video, view);
+		mirror.start();
+		this._mirror = mirror;
+		this._mirrorKind = 'canvas';
+		this._mirrorOn = mirror.running;
+	},	// 看门狗与诊断用的统一读数。
+	_mirrorFrameCount: function () {
+		return this._mirror ? this._mirror.frames : 0;
+	},
+	_mirrorRunning: function () {
+		return this._mirror ? this._mirror.running : false;
+	},
+	_mirrorIdleMs: function () {
+		return -1;
+	},
+	// 画布镜像节点。
+	_createCanvasMirror: function (video, className, cssText) {
 		var doc = this._pipWin.document;
 		var view = doc.createElement('canvas');
 		view.id = '__sepWinPipVideo';
@@ -339,70 +340,10 @@ var __AppPanel = {
 			'pointer-events:none;background:#000;display:block;';
 		return view;
 	},
-	// 每帧把源元素画到镜像画布上。
-	// 帧时钟用"PiP 窗口的 rAF + 定时器兜底"：rAF 一旦被系统节流（窗口被遮挡、
-	// 合成器停摆），定时器还能把循环续上，画面不至于就这么定格。约 32 帧/秒，
-	// 够顺滑，也不至于白烧 CPU。
-	_startMirror: function (video, view) {
-		var self = this;
-		this._stopMirror();
-		var win = this._pipWin;
-		if (!win || !view) return;
-		var ctx = null;
-		try { ctx = view.getContext('2d', { alpha: false }); } catch (e) { }
-		if (!ctx) return;
-		this._mirrorOn = true;
-		this._mirrorFrames = 0;
-		var MIN_GAP = 1000 / 32;
-		var last = 0;
-		var scheduled = false;
-
-		var paint = function () {
-			if (!video || !video.videoWidth) return;
-			if (view.width !== video.videoWidth || view.height !== video.videoHeight) {
-				view.width = video.videoWidth;
-				view.height = video.videoHeight;
-			}
-			ctx.drawImage(video, 0, 0);
-			self._mirrorFrames++;
-		};
-		var finish = function () {
-			if (!scheduled) return;   // 这一帧已经被另一种时钟跑掉了
-			scheduled = false;
-			if (self._mirrorTimer) { clearTimeout(self._mirrorTimer); self._mirrorTimer = 0; }
-			if (self._mirrorFrame) {
-				try { win.cancelAnimationFrame(self._mirrorFrame); } catch (e) { }
-				self._mirrorFrame = 0;
-			}
-			if (!self._mirrorOn) return;
-			var now = 0;
-			try { now = win.performance.now(); } catch (e) { now = Date.now(); }
-			if (now - last >= MIN_GAP) {
-				last = now;
-				try { paint(); } catch (e) { self._mirrorOn = false; return; }
-			}
-			schedule();
-		};
-		var schedule = function () {
-			if (!self._mirrorOn || scheduled) return;
-			scheduled = true;
-			try {
-				self._mirrorFrame = win.requestAnimationFrame(finish);
-			} catch (e) { self._mirrorFrame = 0; }
-			/* rAF 不来的时候（遮挡/合成器停摆）由定时器兜底，保证循环不断。 */
-			self._mirrorTimer = setTimeout(finish, 100);
-		};
-		schedule();
-	},
 	_stopMirror: function () {
+		if (this._mirror) this._mirror.stop();
+		this._mirror = null;
 		this._mirrorOn = false;
-		var win = this._pipWin;
-		if (this._mirrorFrame && win && win.cancelAnimationFrame) {
-			try { win.cancelAnimationFrame(this._mirrorFrame); } catch (e) { }
-		}
-		if (this._mirrorTimer) { clearTimeout(this._mirrorTimer); }
-		this._mirrorFrame = 0;
-		this._mirrorTimer = 0;
 	},
 	// 只显示视频镜像，不移动任何 DOM。
 	_showMirrorOnly: function (video) {
@@ -491,11 +432,22 @@ var __AppPanel = {
 
 		this._watchdog = setInterval(function () {
 			var win = self._pipWin;
-			if (!win || win.closed) { self._stopWatchdog(); return; }
+			if (!win || win.closed) {
+				// PiP 已经关掉，但 pagehide 没来（脚本 close()、浏览器强制结束、
+				// 渲染进程崩溃）时，搬过去的节点还在那个文档里 —— 不搬回来页面就
+				// 少了整块播放器（实测直播页会变成一个没有 <video> 的空壳）。
+				if (self._pip) {
+					try { self._restorePip(); } catch (e) { console.error('[SepWin] restore after close failed:', e); }
+				}
+				self._stopWatchdog();
+				return;
+			}
 			var video = self._pipVideo, view = self._pipView;
 			if (!video || !view) return;
 			var now = Date.now();
 			self._suppressForeignVideos();
+			// 站点会持续注入样式（播放器/弹幕），每轮补差
+			try { self._copyPageStyles(); } catch (e) { }
 			// a) 保持源视频解码（Chrome 可能暂停隐藏标签页的媒体）
 			try {
 				if (video.paused && !video.ended && now - lastResume > 10000) {
@@ -519,6 +471,7 @@ var __AppPanel = {
 						fresh.style.height = '1px';
 					} catch (e) { }
 					self._pipVideo = fresh;
+					if (self._mirror) self._mirror.bindVideo(fresh);
 					self._startMirror(fresh, view);
 					video = fresh;
 					lastSrcFrames = -1;
@@ -526,11 +479,11 @@ var __AppPanel = {
 				}
 			}
 			// b) 绘制循环必须还在出帧；断了就重起。
-			var frames = self._mirrorFrames | 0;
-			if (!self._mirrorOn || frames === lastFrames) {
-				self._startMirror(video, view);
-			}
-			lastFrames = self._mirrorFrames | 0;
+			//    源本身暂停时本来就没新帧可画，这种情况不算断线。
+			var frames = self._mirrorFrameCount();
+			var stalled = !self._mirrorRunning() || (!video.paused && frames === lastFrames);
+			if (stalled) self._startMirror(video, view);
+			lastFrames = self._mirrorFrameCount();
 			// c) 源元素自己不出帧时（解码器停摆，画面上就成了"冻住的最后一帧"），
 			//    往直播边缘轻推 50ms，让媒体管线重新出帧。只在确认它曾经出过帧、
 			//    且已经停摆 15s 以上时做，30s 内最多一次，避免干扰正常播放。
@@ -655,8 +608,15 @@ var __AppPanel = {
 		}
 		if (ctx) {
 			if (ctx.host === ctx.video) {
-				// 区域本身就是 video：只镜像，绝不搬动（搬动直播 MSE
-				// 播放器正是黑屏的原因）。
+				// 区域本身就是 video。如果它的播放器容器里还有弹幕层（普通视频页的
+				// DOM 弹幕、直播页的弹幕层），就把容器整块搬过去，否则只镜像视频
+				// （那样弹幕和控件都会看不到）。搬的是容器、视频仍是镜像，不会打断 MSE。
+				var playerHost = this._playerHostFor(ctx.video);
+				if (playerHost) {
+					this._showHostMirror(playerHost, ctx.video);
+					this._updatePipState();
+					return;
+				}
 				this._showMirrorOnly(ctx.video);
 				return;
 			}
@@ -693,20 +653,20 @@ var __AppPanel = {
 	// 处理办法：只按宽度收敛，把 body 的 zoom 设成 vw/最小宽度。
 	// 用 zoom 而不是 transform，是因为 zoom 会一起缩放布局（宽度/高度/滚动都跟着变），
 	// 而 transform 只改画面、布局还留在原尺寸，会出现大量空白或裁切。
+	// 整页模式的自适应交给 WholePageFitter（class 实现见 wholePage.ts）。
 	_fitWholePage: function () {
 		var st = this._pip;
 		var win = this._pipWin;
 		if (!st || !win || !st.target || st.target.tagName !== 'BODY') return;
-		var body = st.target;
-		if (!body.style) return;
-		body.style.zoom = '';				// 先按 100% 量一次自然宽度
-		var vw = win.innerWidth | 0;
-		if (!vw) return;
-		var natW = Math.max(body.scrollWidth | 0, body.offsetWidth | 0, 1);
-		var scale = Math.min(vw / natW, 1);
-		// 只有放不下才缩；纵向交给滚动条，按高度缩放会把整页压到看不清。
-		body.style.zoom = scale < 0.999 ? String(scale) : '';
-		this._wholeScale = scale;
+		if (!this._wholePage || this._wholeHost !== win) {
+			this._wholePage = new WholePageFitter(win);
+			this._wholeHost = win;
+		}
+		this._wholeScale = this._wholePage.fit(st.target, this._wholeNaturalW);
+	},
+	// 找"视频外面那层播放器容器"（里面有弹幕层才值得整块搬）：实现见 selection.ts。
+	_playerHostFor: function (video) {
+		return this._resolver().playerHostFor(video);
 	},
 	// 把区域的 DOM 移进 PiP 文档，真实 <video> 留在页面里
 	// （停在屏幕外，继续播放），由镜像副本占位。
@@ -720,6 +680,10 @@ var __AppPanel = {
 		// 内联样式，因此站点自己的响应式 CSS 会像对待真实
 		// 元素一样，按 PiP 窗口尺寸调整它。
 		this._pipHost = host;
+		// 在**搬动之前**量下宿主的原始尺寸：搬进 PiP 之后它的布局宽度会塌掉
+		// （实测 668→31px），拿塌掉的尺寸算缩放会把画面压成一条。
+		var naturalRect = host.getBoundingClientRect();
+		this._hostNatural = { w: Math.round(naturalRect.width) || 0, h: Math.round(naturalRect.height) || 0 };
 		// 快照内联样式，关闭时把页面精确还原。
 		this._pipHostCss = host.getAttribute('style');
 		if (!host.style.position || host.style.position === 'static') {
@@ -761,6 +725,10 @@ var __AppPanel = {
 	// 把抓取区域的宽高设为 PiP 窗口的宽高（不做缩放），
 	// 让页面的响应式布局在窗口中重排，
 	// 与经典窗口一致。打开时和每次窗口尺寸变化时调用。
+	// 让搬进来的区域**随 PiP 窗口自适应**：宿主铺满窗口，播放器内部那几层
+	// （视频区/弹幕层）也强制 100%，由站点自己的 CSS 重新排布 ——
+	// 这样窗口多大，画面和弹幕就多大，而不是把一份固定尺寸的快照整体缩放。
+	// 弹幕层跟着变高，条目才会在整块画面上分行飞，而不是全挤在顶上。
 	_fitPipHost: function () {
 		var host = this._pipHost, win = this._pipWin;
 		if (!host || !win) return;
@@ -770,32 +738,84 @@ var __AppPanel = {
 		host.style.left = '0';
 		host.style.top = '0';
 		host.style.margin = '0';
-		host.style.width = vw + 'px';
-		host.style.height = vh + 'px';
+		host.style.width = '100%';
+		host.style.height = '100%';
 		host.style.boxSizing = 'border-box';
+		host.style.transform = '';
+		this._fitPipInner();
 	},
-	// 搬走的区域如果不带样式表，会丢掉页面全部样式。
+	// 播放器内部各层跟着宿主铺满；弹幕层再对齐到**画面实际占据的区域**。
+	//
+	// 窗口比例（如 1.51:1）和视频比例（16:9）通常不一致，画面按 contain 居中、
+	// 上下会留黑边。如果弹幕层铺满整个窗口，弹幕就会飞到黑边上；所以这里按
+	// 视频尺寸算出画面矩形（居中、保持比例），把弹幕层钉在这个矩形上。
+	// 每次窗口尺寸变化都重算，内容始终随容器自适应。
+	_fitPipInner: function () {
+		var win = this._pipWin;
+		var doc = win && win.document;
+		if (!doc) return;
+		var vw = win.innerWidth || 0, vh = win.innerHeight || 0;
+		if (!vw || !vh) return;
+		var video = this._pipVideo;
+		var srcW = (video && video.videoWidth) || 16;
+		var srcH = (video && video.videoHeight) || 9;
+		var scale = Math.min(vw / srcW, vh / srcH);
+		var picW = Math.round(srcW * scale);
+		var picH = Math.round(srcH * scale);
+		var picX = Math.max(0, Math.round((vw - picW) / 2));
+		var picY = Math.max(0, Math.round((vh - picH) / 2));
+		var st = doc.getElementById('__sepWinPipFit');
+		if (!st) {
+			st = doc.createElement('style');
+			st.id = '__sepWinPipFit';
+			doc.head.appendChild(st);
+		}
+		st.textContent = [
+			// 结构层铺满窗口（站点自己的 CSS 会按新尺寸重排）
+			'#__sepWinPipWrap .bpx-player-video-area,#__sepWinPipWrap .bpx-player-video-perch,#__sepWinPipWrap .bpx-player-video-wrap{width:100%!important;height:100%!important}',
+			'#__sepWinPipWrap .bpx-player-primary-area,#__sepWinPipWrap .bpx-player-container{width:100%!important;height:100%!important}',
+			// 各类弹幕层都钉在画面矩形上（它们各自是独立的一层，直接给像素框最稳）
+			'#__sepWinPipWrap .bpx-player-row-dm-wrap,#__sepWinPipWrap .bpx-player-adv-dm-wrap,#__sepWinPipWrap .bpx-player-cmd-dm-wrap,#__sepWinPipWrap .bpx-player-bas-dm-wrap{position:absolute!important;left:' + picX + 'px!important;top:' + picY + 'px!important;width:' + picW + 'px!important;height:' + picH + 'px!important}'
+		].join('\n');
+		this._pipPic = { x: picX, y: picY, w: picW, h: picH };
+	},	// 搬走的区域如果不带样式表，会丢掉页面全部样式。
+	// 把页面的样式表补进 PiP 文档。**必须是增量的**：
+	// 播放器/弹幕的 CSS 是站点在播放开始后动态注入的（实测页面最终有 49 个
+	// <style>，而首次打开时只有两三个），只在打开时复制一次的话，
+	// 后面注入的弹幕样式全缺 —— 弹幕条目会丢掉定位/动画规则，
+	// 变成一条条铺满宽度的方块。看门狗每轮都会调这里补差。
 	_copyPageStyles: function () {
-		if (this._pipStylesCopied) return;
-		this._pipStylesCopied = true;
-		var doc = this._pipWin.document;
+		var win = this._pipWin;
+		if (!win || win.closed) return;
+		var doc = win.document;
+		if (!doc || !doc.head) return;
+		if (!this._pipStyleKeys) this._pipStyleKeys = {};
+		var keys = this._pipStyleKeys;
 		var nodes = document.querySelectorAll('link[rel~="stylesheet"], style');
 		for (var i = 0; i < nodes.length; i++) {
 			var n = nodes[i];
 			if (n.tagName === 'LINK') {
 				if (!n.href) continue;
+				var lk = 'L|' + n.href;
+				if (keys[lk]) continue;
+				keys[lk] = 1;
 				var l = doc.createElement('link');
 				l.rel = 'stylesheet';
 				l.href = n.href;
 				doc.head.appendChild(l);
-			} else {
-				var s = doc.createElement('style');
-				s.textContent = n.textContent;
-				doc.head.appendChild(s);
+				continue;
 			}
+			var text = n.textContent || '';
+			if (!text) continue;
+			// 用长度 + 头尾片段做指纹，够区分内容，也避免每轮全量比较
+			var sk = 'S|' + text.length + '|' + text.slice(0, 60) + '|' + text.slice(-40);
+			if (keys[sk]) continue;
+			keys[sk] = 1;
+			var s = doc.createElement('style');
+			s.textContent = text;
+			doc.head.appendChild(s);
 		}
-	},
-	// 在 PiP 窗口里构建与经典窗口相同的七个按钮的控制面板。
+	},	// 在 PiP 窗口里构建与经典窗口相同的七个按钮的控制面板。
 	// ButtonPanel 存在于页面文档中，
 	// 因此 PiP 文档需要自己的副本（否则窗口里没有菜单）。
 	_addPipPanel: function (pipWin) {
@@ -954,29 +974,16 @@ var __AppPanel = {
 	_restorePipNode: function () {
 		var st = this._pip;
 		try {
-			// 1. 把真实 <video> 放回原来的位置
-			var parked = this._pipParked;
-			if (parked) {
-				this._pipParked = null;
-				try {
-					if (parked.parent) {
-						if (parked.next && parked.next.parentNode === parked.parent) {
-							parked.parent.insertBefore(parked.video, parked.next);
-						} else {
-							parked.parent.appendChild(parked.video);
-						}
-					}
-				} catch (e) {
-					console.error('[SepWin] failed to restore the video element:', e);
-				}
-			}
-			// 2. 把显示的区域搬回去
+			// 顺序很重要：**先**把宿主搬回页面，再把视频放回宿主内部。
+			// 反过来的话，视频会被插进一个还留在（可能已销毁的）PiP 文档里的父节点，
+			// 结果是页面连 <video> 都没了 —— 实测直播页就是这样被掏空的。
+			// 1. 把显示的区域搬回去
 			if (st) {
 				this._pip = null;
 				// 整页模式改过 body 的内联样式（缩放/尺寸），搬回去前先清掉
 				if (st.target && st.target.tagName === 'BODY') {
 					/* 整页模式改过 body 的 zoom，搬回页面之前清掉 */
-					st.target.style.zoom = '';
+					if (this._wholePage) this._wholePage.reset(st.target);
 					this._wholeScale = 1;
 				}
 				if (st.parent && st.target.parentNode !== st.parent) {
@@ -984,7 +991,37 @@ var __AppPanel = {
 					st.parent.insertBefore(st.target, ref);
 				}
 			}
-			// 3. 删掉跟着区域一起搬回来的镜像
+			// 2. 把真实 <video> 放回宿主里原来的位置（此时宿主已经回到页面）
+			var parked = this._pipParked;
+			if (parked) {
+				this._pipParked = null;
+				try {
+					var home = parked.parent;
+					// 宿主可能已经被销毁/换掉：那就退回页面里可见的容器
+					if (!home || (home.isConnected === false)) {
+						home = (st && st.target && st.target.isConnected !== false) ? st.target : document.body;
+					}
+					if (home) {
+						if (parked.next && parked.next.parentNode === home) {
+							home.insertBefore(parked.video, parked.next);
+						} else {
+							home.appendChild(parked.video);
+						}
+					}
+					// 停靠时改过的内联样式要清掉，否则视频还是 1×1 藏在屏幕外
+					parked.video.style.position = '';
+					parked.video.style.left = '';
+					parked.video.style.top = '';
+					parked.video.style.width = '';
+					parked.video.style.height = '';
+				} catch (e) {
+					console.error('[SepWin] failed to restore the video element:', e);
+				}
+			}
+			// 3. 清掉临时的停靠区（视频已经放回去了）
+			var park = document.getElementById('__sepWinPark');
+			if (park && park.parentNode) park.parentNode.removeChild(park);
+			// 4. 删掉跟着区域一起搬回来的镜像
 			var views = document.querySelectorAll('#__sepWinPipVideo');
 			for (var i = 0; i < views.length; i++) {
 				if (views[i].parentNode) views[i].parentNode.removeChild(views[i]);
@@ -1057,6 +1094,10 @@ var __AppPanel = {
 		this._restorePipNode();
 		this._pipStack = [];
 		this._pipPanel = null;
+		this._hostNatural = null;
+		this._hostScale = 1;
+		// 新的 PiP 文档需要重新补样式
+		this._pipStyleKeys = null;
 		this._pipWin = null;
 		// 丢掉 PiP 工具栏按钮的引用，避免后续书签状态
 		// 更新碰到已经脱离文档的节点。

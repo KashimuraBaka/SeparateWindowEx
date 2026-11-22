@@ -25,7 +25,12 @@ import { use } from './runtime';
 	selector: () => use('__AppPanel').selector,
 	setMode: (pip: boolean) => { use('__AppPanel').cfg.useDocPip = !!pip; },
 	// 按整页（BODY）方式弹出：排障时用来复现"整页"那条路径。
-	applyBody: () => use('__AppPanel').apply(document.body),
+	applyBody: () => {
+		// 整页已经弹出时 document.body 是 null：直接忽略，别抛错
+		const body = document.body;
+		if (body) use('__AppPanel').apply(body);
+		return !!body;
+	},
 	// 整页缩放：手动重算一次 + 读取当前状态（排障用）
 	fitWhole: () => use('__AppPanel')._fitWholePage(),
 	wholeState: () => {
@@ -51,8 +56,13 @@ import { use } from './runtime';
 			const src: any = panel._pipVideo;
 			return {
 				open: !!panel._pipWin,
-				mirrorOn: !!panel._mirrorOn,
-				frames: panel._mirrorFrames | 0,
+				mirrorOn: !!panel._mirrorRunning(),
+				kind: panel._mirrorKind,
+				frames: panel._mirrorFrameCount(),
+				fps: panel._mirror ? panel._mirror.fps : 0,
+				rafAge: panel._mirror ? panel._mirror.rafAge : -1,
+				idleMs: panel._mirrorIdleMs(),
+				mp: panel._mirror ? { calls: panel._mirror.frames, err: panel._mirror.errors, restarts: panel._mirror.restarts } : null,
 				heals: panel._heals | 0,
 				mirrored: !!(view && src),
 				source: src ? {
