@@ -26,8 +26,6 @@ export class TargetResolver {
   /** 播放器容器至少要有这么大（太小说明只是包了一层的壳）。 */
   private readonly minHostWidth = 200;
   private readonly minHostHeight = 120;
-  /** 弹幕层的特征选择器（bilibili 视频页/直播页、以及常见 danmaku 命名）。 */
-  private readonly danmakuSelector = '.bpx-player-row-dm-wrap, .web-player-danmaku, .bili-danmaku-x-dm, [class*="danmaku"]';
 
   constructor(
     private readonly doc: Document,
@@ -47,22 +45,30 @@ export class TargetResolver {
       return false;
     }
     if (!style) return false;
-    if (style.display === 'none' || style.visibility === 'hidden') return true;
+    if (style.display === "none" || style.visibility === "hidden") return true;
     if (parseFloat(style.opacity) === 0) return true;
     const rect = el.getBoundingClientRect();
     return rect.width < 2 || rect.height < 2;
   }
 
   /** 光标下有 `<video>`、但命中的是盖在它上面的浮层时，返回视频外面那层容器。 */
-  videoHostFor(stack: Element[] | null, target: Element | null): Element | null {
+  videoHostFor(
+    stack: Element[] | null,
+    target: Element | null,
+  ): Element | null {
     if (!stack || !stack.length) return null;
     for (const node of stack) {
-      if (!node || node.tagName !== 'VIDEO') continue;
+      if (!node || node.tagName !== "VIDEO") continue;
       if (node === target || node.contains(target)) return null; // 就点在视频里：维持"只镜像视频"
       let parent: Element | null = node;
       for (let i = 0; i < 4 && parent; i++) {
         parent = parent.parentElement;
-        if (!parent || parent === this.doc.body || parent === this.doc.documentElement) break;
+        if (
+          !parent ||
+          parent === this.doc.body ||
+          parent === this.doc.documentElement
+        )
+          break;
         const rect = parent.getBoundingClientRect();
         if (rect.width >= 200 && rect.height >= 120) return parent;
       }
@@ -83,13 +89,14 @@ export class TargetResolver {
     let node: Element | null = video;
     for (let i = 0; i < 4 && node; i++) {
       node = node.parentElement;
-      if (!node || node === this.doc.body || node === this.doc.documentElement) return null;
+      if (!node || node === this.doc.body || node === this.doc.documentElement)
+        return null;
       const rect = node.getBoundingClientRect();
-      if (rect.width < this.minHostWidth || rect.height < this.minHostHeight) continue;
-      // 装着弹幕层的容器最理想；弹幕还没加载时，退一步按结构判断：
-      // 真实播放器容器里除了视频那条链，还会有控件/浮层（子元素 ≥ 2），
-      // 而纯包一层的壳通常只有 1 个孩子。
-      if (node.querySelector(this.danmakuSelector)) return node;
+      if (rect.width < this.minHostWidth || rect.height < this.minHostHeight)
+        continue;
+      // 纯结构判断：真实播放器容器里除了视频那条链，还会有控件/浮层
+      // （子元素 ≥ 2），而纯包一层的壳通常只有 1 个孩子。
+      // 不认任何站点类名 —— 这是通用扩展，不是某个站点的插件。
       if (node.children.length >= 2) return node;
     }
     return null;
@@ -98,7 +105,9 @@ export class TargetResolver {
   fromPoint(x: number, y: number): Element | null {
     this.hooks.hideOverlay?.();
     let target = this.doc.elementFromPoint(x, y);
-    const stack = this.doc.elementsFromPoint ? Array.from(this.doc.elementsFromPoint(x, y)) : [];
+    const stack = this.doc.elementsFromPoint
+      ? Array.from(this.doc.elementsFromPoint(x, y))
+      : [];
     if (this.isGhostLayer(target) && stack.length) {
       // elementsFromPoint 是"最上面优先"：从最上面往下找第一个既不是自己的覆盖层、
       // 也不是透明拦截层的元素 —— 那才是用户真正看见的东西。
@@ -117,13 +126,15 @@ export class TargetResolver {
   /** 统一入口：把光标下的元素解析成最终要选的元素。 */
   resolve(x: number, y: number, hovered: Element | null): Element | null {
     if (!hovered || this.isGhostLayer(hovered)) return this.fromPoint(x, y);
-    const stack = this.doc.elementsFromPoint ? Array.from(this.doc.elementsFromPoint(x, y)) : null;
+    const stack = this.doc.elementsFromPoint
+      ? Array.from(this.doc.elementsFromPoint(x, y))
+      : null;
     return this.videoHostFor(stack, hovered) || hovered;
   }
 
   private isOwn(el: Element | null | undefined): boolean {
     if (!el) return true;
     if (this.hooks.isOwnElement) return this.hooks.isOwnElement(el);
-    return !!el.id && el.id.indexOf('__') === 0;
+    return !!el.id && el.id.indexOf("__") === 0;
   }
 }

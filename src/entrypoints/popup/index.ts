@@ -155,16 +155,25 @@ var PopUp = {
 					last.innerHTML = '';
 					for (let i = 0, len = items.css.length; i < len; ++i) {
 						let name = items.name[i];
-						let checked = '';
-						if (items.icon[i] == true) checked = 'checked';
-						if (name == '') name = 'Area #' + (i + 1);
-						last.innerHTML += '<div id="' + i + '" class="buttons" data-index="' + i + '">' +
-							'<div class="name" data-index="' + i + '">' + name + '</div>' +
-							'<div class="edit">' +
-							'<div class="wrap_icons"><input id="icon_' + i + '" class="showIcon" data-index="' + i + '" type="checkbox" ' + checked + '><label for="icon_' + i + '" class="icons" title="' + i18('showIcon') + '"></label></div>' +
-							'<div class="wrap_del"><button id="edit_' + i + '" class="delete" data-index="' + i + '" title="' + i18('delete') + '"></button></div>' +
-							'</div>' +
-							'</div>';
+						const checked = items.icon[i] === true ? 'checked' : '';
+						if (name === '') name = `Area #${i + 1}`;
+						// HTML 骨架里只放数字/固定文案；区域名来自存储（用户可改），
+						// 用 textContent 写入，避免把任意字符串当 HTML 解析。
+						last.innerHTML += `
+							<div id="${i}" class="buttons" data-index="${i}">
+								<div class="name" data-index="${i}"></div>
+								<div class="edit">
+									<div class="wrap_icons">
+										<input id="icon_${i}" class="showIcon" data-index="${i}" type="checkbox" ${checked}>
+										<label for="icon_${i}" class="icons" title="${i18('showIcon')}"></label>
+									</div>
+									<div class="wrap_del">
+										<button id="edit_${i}" class="delete" data-index="${i}" title="${i18('delete')}"></button>
+									</div>
+								</div>
+							</div>`;
+						const nameCell = last.querySelector('.buttons:last-child > .name');
+						if (nameCell) nameCell.textContent = name;
 					}
 					document.querySelectorAll('.buttons').forEach(
 						function (button) {

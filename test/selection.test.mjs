@@ -193,14 +193,22 @@ test('给了搬动前量到的宽度时，以它为准（搬进 PiP 之后量到
   assert.equal(body.style.zoom, '');
 });
 
-test('点视频时优先选"装着弹幕层的播放器容器"，这样弹幕能跟着弹出', () => {
+test('点视频时优先选"除了视频还装着别的图层"的容器，这样弹幕/控件能跟着弹出', () => {
   const s = scene();
+  // 容器里除了 <video> 还有一个图层（弹幕/控件/浮层都算）——
+  // 判定只看结构，不认任何站点类名。
   const dm = el('div', { rect: { width: 672, height: 378 }, parent: s.player });
-  dm.className = 'bpx-player-row-dm-wrap';
-  s.player.__query = [dm];
+  s.player.children = [s.video, dm];
   const doc = fakeDoc({ body: s.body, docEl: s.docEl, stack: [s.video, s.player, s.body] });
   const resolver = new TargetResolver(doc);
   assert.equal(resolver.playerHostFor(s.video), s.player);
+});
+
+test('容器只有一个孩子（纯壳）时返回 null，退回"只镜像视频"', () => {
+  const s = scene();
+  const doc = fakeDoc({ body: s.body, docEl: s.docEl, stack: [s.video, s.player, s.body] });
+  const resolver = new TargetResolver(doc);
+  assert.equal(resolver.playerHostFor(s.video), null);
 });
 
 test('容器里没有弹幕层时返回 null（退回"只镜像视频"）', () => {

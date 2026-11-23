@@ -138,13 +138,21 @@ var ButtonPanel = {
 	add: function () {
 		use('CssControl').insert('panel');
 		this.panel = document.createElement('div');
-		this.panel.innerHTML = '<button id="' + this.id.btn_back + '" class="' + use('CssControl').class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelBack') + '"></button>' +
-			'<button id="' + this.id.btn_save + '" class="' + use('CssControl').class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelSaveSize') + '"></button>' +
-			'<button id="' + this.id.btn_up + '" class="' + use('CssControl').class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelScrollUp') + '"></button>' +
-			'<button id="' + this.id.btn_dwn + '" class="' + use('CssControl').class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelScrollDown') + '"></button>' +
-			'<button id="' + this.id.btn_prsc + '" class="' + use('CssControl').class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelPrintScreen') + '"></button>' +
-			'<button id="' + this.id.btn_bkm + '" class="' + use('CssControl').class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelBookMarks') + '"></button>' +
-			'<button id="' + this.id.btn_link + '" class="' + use('CssControl').class.btnPanel + '" title="' + chrome.i18n.getMessage('PanelGetLink') + '"></button>';
+		// 按钮 id/class 固定、只有 title 是本地化文案：用数据表 + 模板字符串，
+		// 比一长串 + 拼串好读，也不会漏引号。
+		const cls = use('CssControl').class.btnPanel;
+		const buttons: Array<[string, string]> = [
+			[this.id.btn_back, 'PanelBack'],
+			[this.id.btn_save, 'PanelSaveSize'],
+			[this.id.btn_up, 'PanelScrollUp'],
+			[this.id.btn_dwn, 'PanelScrollDown'],
+			[this.id.btn_prsc, 'PanelPrintScreen'],
+			[this.id.btn_bkm, 'PanelBookMarks'],
+			[this.id.btn_link, 'PanelGetLink'],
+		];
+		this.panel.innerHTML = buttons
+			.map(([id, key]) => `<button id="${id}" class="${cls}" title="${chrome.i18n.getMessage(key)}"></button>`)
+			.join('');
 		this.panel.id = this.id.panel;
 		use('CssControl').setComClass(this.panel);
 		this.panel.classList.add('__btn_panel_blink');
@@ -252,7 +260,21 @@ var ButtonPanel = {
 	},
 	showWinLink: function () {
 		this.win_link = document.createElement('div');
-		this.win_link.innerHTML = '<div id="' + this.id.win_link + '"><div><textarea>' + use('Selector').getLink(Modification.target) + '</textarea></div><button id="' + this.id.btn_win_link + '" class="' + use('CssControl').class.btnPanel + '" ">OK</button></div>';
+		// 用 DOM API 构建：链接来自页面（可能包含任意字符），
+		// 直接拼进 innerHTML 会破坏结构，也存在注入风险。
+		const linkBox = document.createElement('div');
+		linkBox.id = this.id.win_link;
+		const linkRow = document.createElement('div');
+		const ta = document.createElement('textarea');
+		ta.value = use('Selector').getLink(Modification.target);
+		linkRow.appendChild(ta);
+		const okBtn = document.createElement('button');
+		okBtn.id = this.id.btn_win_link;
+		okBtn.className = use('CssControl').class.btnPanel;
+		okBtn.textContent = 'OK';
+		linkBox.appendChild(linkRow);
+		linkBox.appendChild(okBtn);
+		this.win_link.appendChild(linkBox);
 		this.win_link.id = this.id.win_link_over;
 		use('CssControl').setComClass(this.win_link);
 		document.body.appendChild(this.win_link);
@@ -307,27 +329,12 @@ var Modification = {
 	trgtVideo: undefined,
 	fixFunc: {},
 	_modifyFunc: function () {
-		var func = 'Element.prototype["swRemCh"]=Element.prototype.removeChild;' +
-			'Element.prototype.removeChild=function(elem){' +
-			'if(elem.classList && (elem.classList.contains("__parent") || elem.classList.contains("__target"))){' +
-			'if(elem.hasAttribute("src") && elem.getAttribute("src")==""){elem.parentNode.swRemCh(elem);return;}' +
-			'if(document.hasOwnProperty("swRemoval")){' +
-			'if(document.swRemoval.indexOf(elem)==-1) document.swRemoval.push(elem);' +
-			'}else{document["swRemoval"]=[];document.swRemoval.push(elem);}' +
-			'}else{Element.prototype.swRemCh.apply(this,[elem]);}}';
-		this.fixFunc = document.createElement('script');
-		this.fixFunc.appendChild(document.createTextNode(func));
-		document.body.appendChild(this.fixFunc);
+		// 主世界的 removeChild 补丁由后台用 executeScript 注入（见 core/removeGuard.ts）：
+		// 不再拼字符串 + 内联 <script>（那会被页面的 CSP 拦掉，且没法类型检查）。
+		use('__BgCmd').sendCmd('pipRemoveGuard', { on: true });
 	},
 	_removeFunc: function () {
-		var func = 'Element.prototype.removeChild=Element.prototype.swRemCh;' +
-			'if(document.hasOwnProperty("swRemoval")){' +
-			'for(var i=0,len=document.swRemoval.length;i<len;i++){document.swRemoval[i].parentNode.removeChild(document.swRemoval[i]);};' +
-			'delete document["swRemoval"];delete document["swRemCh"];}';
-
-		this.fixFunc = document.createElement('script');
-		this.fixFunc.appendChild(document.createTextNode(func));
-		document.body.appendChild(this.fixFunc);
+		use('__BgCmd').sendCmd('pipRemoveGuard', { on: false });
 	},
 	_deleteFunc: function () {
 		if (this.fixFunc.parentNode) {
@@ -428,7 +435,7 @@ var Modification = {
 				this._modifyParents(this.target, true);
 			} catch (e) {
 				this.errorRestore();
-				console.log(e);
+				console.error('[SepWin] restore failed:', e);
 			}
 			use('CssControl').insert('window');
 			this._deleteFunc();
@@ -443,7 +450,7 @@ var Modification = {
 				this._modifyTarget(this.target, false);
 			} catch (e) {
 				this.errorRestore();
-				console.log(e);
+				console.error('[SepWin] restore failed:', e);
 			}
 			document.body.removeChild(this.fixFunc);
 		}

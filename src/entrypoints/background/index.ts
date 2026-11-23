@@ -1,5 +1,6 @@
 // @ts-nocheck -- 遗留文件体：模块边界已就位，类型迁移留到后续步骤。
 import { createSiteStore } from '../../core/storage';
+import { sepWinRemoveGuard } from '../../core/removeGuard';
 import { dispatch, sendToTab } from '../../core/messages';
 /**
  * 作者：Kashimura
@@ -512,6 +513,24 @@ var cmdFromTab = {
 				});
 			});
 		});
+	},
+	// 让主世界的 removeChild 补丁生效/失效（见 core/removeGuard.ts）。
+	// 用 executeScript({ world: 'MAIN', func }) 注入：不像内联 <script> 那样
+	// 会被页面的 CSP 拦掉，也不需要拼字符串代码。
+	pipRemoveGuard: function (arg, tab) {
+		try {
+			chrome.scripting.executeScript({
+				target: { tabId: tab.id, allFrames: false },
+				world: 'MAIN',
+				func: sepWinRemoveGuard,
+				args: [!!(arg && arg.on)]
+			}, function () {
+				if (chrome.runtime.lastError) {
+					// 受限页面（edge://、商店页）注入会失败，功能退回原生行为
+					void chrome.runtime.lastError;
+				}
+			});
+		} catch (e) { }
 	},
 	// 上一级/下一级换了层级之后，把站点记录里的**这一条区域**改名成新选择器，
 	// 这样下次点图标打开的就是刚才浏览到的那一层（与经典窗口的 saveSelector 一致）。

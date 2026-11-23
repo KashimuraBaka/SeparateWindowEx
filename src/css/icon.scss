@@ -12,3 +12,31 @@
 .__iconSepWin:hover {
   opacity: 1;
 }
+/** 源 <video> 被"停放"到屏幕外时的容器（页面侧，每个页面都加载本样式表）。 */
+#__sepWinPark {
+  position: fixed;
+  left: -20000px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/** "点这里在置顶窗口打开"的提示条（页面侧）。 */
+#__sepWinPipPrompt {
+  position: fixed;
+  left: 50%;
+  top: 24px;
+  transform: translateX(-50%);
+  z-index: 2147483647;
+  padding: 12px 20px;
+  border-radius: 10px;
+  background: rgba(17, 24, 39, 0.94);
+  color: #fff;
+  font: 600 14px/1.4 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  user-select: none;
+}

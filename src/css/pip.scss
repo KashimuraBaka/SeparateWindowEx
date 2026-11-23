@@ -1,0 +1,160 @@
+/**
+ * 注入到 Document PiP 文档的样式（只作用于 PiP 窗口，不影响原页面）。
+ *
+ * 这里放的是“搬进 PiP 之后必须兜住”的规则：站点会在窗口尺寸变化时
+ * 给播放器写内联像素尺寸，靠 resize 事件重写会被它抢回去，所以统一用
+ * !important 兜底。以前这些规则是拼在 mainApp.ts 里的字符串数组，
+ * 维护起来很难读；现在改成独立样式表，由构建产出 dist/css/pip.css，
+ * 运行时用 <link> 引进 PiP 文档（见 mainApp._fitPipInner）。
+ */
+
+// 宿主（搬进来的那块区域）无条件跟随容器。
+// 站点在窗口尺寸变化时会自己给播放器写**像素**尺寸（内联 style），
+// 只靠 resize 事件里重写 100% 会被它抢回去（事件合并/延迟时就抢不过），
+// 表现就是“窗口变大了，里面的元素没跟着变”。
+#__sepWinPipWrap > :first-child {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  margin: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  box-sizing: border-box !important;
+  transform: none !important;
+}
+
+// 镜像画布按容器**重新布局**成 100%，而不是沿用源视频元素自己的尺寸
+// 再被拉伸（源 600×600、窗口 1200×1200 时那样就是糊/马赛克）。
+#__sepWinPipWrap #__sepWinPipVideo {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  image-rendering: auto !important;
+}
+
+// 结构层铺满窗口（站点自己的 CSS 会按新尺寸重排）。
+// 这里用 :has() 做**结构选择**，不认任何站点类名：
+// 凡是"内部包含镜像画布"的祖先层，都撑满宿主。
+#__sepWinPipWrap > :first-child :has(#__sepWinPipVideo) {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+
+/**
+ * PiP 文档根节点与容器。搬进来的区域如果沿用了页面的 html/body 样式
+ * （页面通常带滚动条/外边距），窗口边缘会出现白边，所以这里归零。
+ */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+
+#__sepWinPipWrap {
+  position: fixed !important;
+  left: 0 !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
+  background: #000;
+}
+
+// 只镜像视频时铺满的画布 / 普通节点居中显示（两类占位都当绝对层）
+#__sepWinPipWrap > .__pipFill {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+#__sepWinPipWrap > .__pipPlain {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  background: #000;
+}
+
+#__sepWinPipWrap > .__pipPlain > * {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+// 页面侧注入的选区图标/事件面板/提示条跟着区域一起搬进来是没意义的：
+// 它们只是页面上的入口，尺寸又是按页面算的（图标是 background-size:contain），
+// 一旦被站点 CSS 拉大就会在窗口里糊成一大片白色图块。这里直接隐藏。
+.__iconSepWin,
+#__evt_panel,
+#__panelWrapper,
+#__sepWinPipPrompt {
+  display: none !important;
+}
+/**
+ * “获取链接”浮层：整块结构固定，只有内容来自运行时，
+ * 因此样式放在这里（JS 只负责建节点/挂 class）。
+ */
+#__pip_link_overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  background: rgba(15, 23, 42, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#__pip_link_overlay > .__pipLinkBox {
+  width: 92%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font: 600 13px/1.4 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+#__pip_link_overlay > .__pipLinkBox > textarea {
+  width: 100%;
+  height: 110px;
+  border: 1px solid #d7dce6;
+  border-radius: 8px;
+  padding: 8px;
+  font: 12px/1.5 ui-monospace, Consolas, monospace;
+  resize: none;
+}
+
+#__pip_link_overlay > .__pipLinkBox > button {
+  align-self: center;
+  width: 72px;
+  height: 28px;
+  border: none;
+  border-radius: 7px;
+  color: #fff;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  cursor: pointer;
+  font-weight: 600;
+}
+// 镜像画布的静态部分（站点自己的内联样式由 JS 拼在前面，保留在元素上）。
+#__sepWinPipVideo {
+  pointer-events: none;
+  background: #000;
+  display: block;
+}
