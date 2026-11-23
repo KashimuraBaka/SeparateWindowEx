@@ -256,19 +256,30 @@ test('宿主窗口变大后，后备尺寸跟着重算（否则画面会被拉�
   assert.equal(view.width, 600);
   assert.equal(view.height, 338);
 
-  // 用户把 PiP 窗口拖大：拖动期间不重建画布（否则每帧重建缓冲会卡），
-  // 尺寸稳定 120ms 后才重算一次。
+  // 拖动窗口：不会每帧重建（那会卡），但也不能一直不重建：
+  //   ① 尺寸一停（24ms≈3 帧没再变）立刻重建 —— 松手就该清晰；
+  //   ② 持续拖动时最多每 100ms 重建一次 —— 拖动过程中也能变清晰。
   host.innerWidth = 1200;
   host.frames(1);
-  assert.equal(view.width, 600, '拖动过程中不应重建后备缓冲');
-  host.advanceClock(150);
+  assert.equal(view.width, 600, '刚变尺寸这一帧不该重建');
+  host.advanceClock(50);           // 停手 50ms
   host.frames(1);
-  assert.equal(view.width, 1200);
+  assert.equal(view.width, 1200, '停手后应立刻清晰');
   assert.equal(view.height, 675);
+
+  // 持续拖动：尺寸每帧都在变，重建被限流
+  let applied = 0;
+  let lastWidth = view.width;
+  for (let i = 0; i < 60; i++) {
+    host.innerWidth += 20;
+    host.advanceClock(7);
+    host.frames(1);
+    if (view.width !== lastWidth) { applied += 1; lastWidth = view.width; }
+  }
+  assert.ok(applied >= 2 && applied <= 8, '持续拖动时重建次数应被限流，实际 ' + applied);
 
   // 窗口再大也是等比铺满（高度受限）：fit = min(4000/1920, 1000/1080) = 0.926
   host.innerWidth = 4000;
-  host.frames(1);
   host.advanceClock(150);
   host.frames(1);
   assert.equal(view.width, 1778);

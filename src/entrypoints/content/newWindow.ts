@@ -229,6 +229,9 @@ var ButtonPanel = {
 	},
 	changeZoom: function () {
 		let zoom = window.devicePixelRatio;
+		// resize 往往先于"进入独立窗口"到达，此时 Modification.target / 面板
+		// 都还不存在；早退，避免 offsetWidth of undefined（控制台会一直刷这条）。
+		if (!Modification.target || !this.panel || !this.panel.style) return;
 		let right = Modification.target.offsetWidth - Modification.target.clientWidth;
 		this.windowZoom = zoom;
 		if (zoom == 1) {
@@ -402,6 +405,10 @@ var Modification = {
 		}
 	},
 	checkTrgtScrolling: function () {
+		// 这个函数会被 resize/滚动监听调用，那时可能还没有 target
+		// （还没进入"独立窗口"状态）；早退，否则抛
+		// "Cannot read properties of undefined (reading 'scrollHeight')"。
+		if (!this.target) return;
 		if ((this.target.scrollHeight - this.target.clientHeight) > 55) {
 			this.target.classList.add('__onScroll');
 		} else {
@@ -545,15 +552,26 @@ var SepWinEvents = {
 		onResize: null
 	},
 	addEvents: function () {
+		// 必须用**绑好的**函数注册：处理器里用 `this.cmdBtnPanel(...)` /
+		// `this.timers` 访问对象成员，直接传 `SepWinEvents.onClick` 会让
+		// this 变成 window，于是每次点击/缩放都抛
+		// `this.cmdBtnPanel is not a function`、`checkTrgtScrolling` 里的
+		// `.scrollHeight` of undefined（另一台设备的控制台就是这么报的）。
+		// 而且 removeEventListener 必须拿到同一个引用，所以绑定后存回对象。
+		SepWinEvents.onClick = SepWinEvents.onClick.bind(SepWinEvents);
+		SepWinEvents.onResize = SepWinEvents.onResize.bind(SepWinEvents);
+		SepWinEvents.unloadPage = SepWinEvents.unloadPage.bind(SepWinEvents);
 		window.addEventListener('click', SepWinEvents.onClick, true);
 		window.addEventListener('resize', SepWinEvents.onResize, true);
-		window.addEventListener('unload', SepWinEvents.unloadPage,true);
+		// unload 已被 Chromium 弃用（控制台会报 "Permissions policy violation:
+		// unload is not allowed in this document"），用 pagehide 代替。
+		window.addEventListener('pagehide', SepWinEvents.unloadPage, true);
 	},
 	removeEvents: function () {
 		clearTimeout(this.timers.onResize);
 		window.removeEventListener('click', SepWinEvents.onClick, true);
 		window.removeEventListener('resize', SepWinEvents.onResize, true);
-		window.removeEventListener('unload', SepWinEvents.unloadPage,true);
+		window.removeEventListener('pagehide', SepWinEvents.unloadPage, true);
 	},
 	onClick: function (event) {
 		if (use('CssControl').isBtnClass(event.target)) {
@@ -628,8 +646,6 @@ var SepWinEvents = {
 		}
 	}
 };
-SepWinEvents.onClick = SepWinEvents.onClick.bind(SepWinEvents);
-SepWinEvents.onResize = SepWinEvents.onResize.bind(SepWinEvents);
 
 // ---- 注册表 ----
 register('EventPanel', EventPanel);

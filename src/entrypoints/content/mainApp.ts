@@ -436,6 +436,7 @@ var __AppPanel = {
 		self._heals = 0;
 
 		this._watchdog = setInterval(function () {
+
 			var win = self._pipWin;
 			if (!win || win.closed) {
 				// PiP 已经关掉，但 pagehide 没来（脚本 close()、浏览器强制结束、
@@ -467,6 +468,10 @@ var __AppPanel = {
 				var fresh = self._findPlayableVideo(video);
 				if (fresh) {
 					try {
+						/* 记住它原来的内联样式：关掉 PiP 时要原样还回去，
+						   否则它一直停在 1×1、屏幕外，页面播放器是黑的
+						   （实测关窗后 <video> 仍留在 inline 的停放样式上）。 */
+						self._rememberStyle(fresh);
 						/* 挪到 PiP 窗口可视区之外但仍在渲染树里：继续解码，不会露出来 */
 						fresh.style.display = '';
 						fresh.style.position = 'fixed';
@@ -547,6 +552,7 @@ var __AppPanel = {
 		this._showNode(target);
 		this._addPipPanel(pipWin);
 
+
 		// PiP 窗口存在期间保持屏幕唤醒、源标签页存活。
 		this._keepAwake(true);
 		this._visibilityShim(true);
@@ -585,16 +591,29 @@ var __AppPanel = {
 		// 窗口想多大由用户拖、或由浏览器决定；"跟随上次保存的大小"只体现在请求值上。
 		// 用户拖动改变 PiP 窗口大小时，保持区域跟随。
 		pipWin.addEventListener('resize', function () {
-			// resize 每帧可能触发多次：合并到一帧一次，避免重复重排播放器
-			if (self._pipResizeRaf) return;
-			var raf = pipWin.requestAnimationFrame || window.requestAnimationFrame;
-			self._pipResizeRaf = raf(function () {
-				self._pipResizeRaf = 0;
-				if (!self._pipWin || self._pipWin.closed) return;
-				self._fitPipHost();
-				self._fitWholePage();
-				self._viewportShim(true, pipWin.innerWidth, pipWin.innerHeight);
-			});
+			if (self._pipWin !== pipWin || pipWin.closed) return;
+			// 宿主的尺寸由注入样式里的 `#__sepWinPipWrap > :first-child{...100%!important}`
+			// 无条件保证，这里不再每次 resize 都写内联样式（那会每帧触发重排、拖动变卡）。
+			// 剩下的整页缩放和视口同步略重，节流到 50ms 一次。
+			// 注意不用 rAF 做节流：拖动窗口时 rAF 可能被暂停，会一直不执行。
+			var now = Date.now();
+			if (now - (self._pipFitAt || 0) < 50) {
+				if (!self._pipFitTimer) {
+					self._pipFitTimer = setTimeout(function () {
+						self._pipFitTimer = 0;
+						if (self._pipWin !== pipWin || pipWin.closed) return;
+						self._pipFitAt = Date.now();
+						self._fitPipHost();
+						self._fitWholePage();
+						self._viewportShim(true, pipWin.innerWidth, pipWin.innerHeight);
+					}, 50);
+				}
+				return;
+			}
+			self._pipFitAt = now;
+			self._fitPipHost();
+			self._fitWholePage();
+			self._viewportShim(true, pipWin.innerWidth, pipWin.innerHeight);
 		});
 	},
 	// 在 PiP 窗口里显示 `node`。含 <video> 的节点走"镜像"：
@@ -691,6 +710,9 @@ var __AppPanel = {
 	// （停在屏幕外，继续播放），由镜像副本占位。
 	// 这样 MSE 流不会断，上一级/下一级也能照常切换区域。
 	_showHostMirror: function (host, video) {
+		// 下面几处 setTimeout 里用 self.xxx()；没有这一行的话 self 会落到全局
+		// window，延迟回调就会抛 "self._suppressForeignVideos is not a function"。
+		var self = this;
 		var doc = this._pipWin.document;
 		var wrap = doc.getElementById('__sepWinPipWrap');
 		this._copyPageStyles();
@@ -711,6 +733,7 @@ var __AppPanel = {
 		var view = this._createMirror(video, video.className, this._mirrorCss(video));
 
 		// 记住 video 原来的位置，再把真实元素停到屏幕外。
+		this._rememberStyle(video);
 		this._pipParked = { video: video, parent: video.parentNode, next: video.nextSibling };
 		if (video.parentNode) video.parentNode.insertBefore(view, video);
 		var park = document.getElementById('__sepWinPark');
@@ -783,6 +806,11 @@ var __AppPanel = {
 		var st = doc.createElement('style');
 		st.id = '__sepWinPipFit';
 		st.textContent = [
+			// 宿主（搬进来的那块区域）无条件跟随容器。
+			// 站点在窗口尺寸变化时会自己给播放器写**像素**尺寸（内联 style），
+			// 只靠 resize 事件里重写 100% 会被它抢回去（事件合并/延迟时就抢不过），
+			// 表现就是"窗口变大了，里面的元素没跟着变"。用 !important 的 CSS 兜住。
+			'#__sepWinPipWrap > :first-child{position:absolute!important;left:0!important;top:0!important;margin:0!important;width:100%!important;height:100%!important;box-sizing:border-box!important;transform:none!important}',
 			// 镜像画布按容器**重新布局**成 100%，而不是沿用源视频元素自己的尺寸
 			// 再被拉伸（源 600×600、窗口 1200×1200 时那样就是糊/马赛克）。
 			'#__sepWinPipWrap #__sepWinPipVideo{position:absolute!important;left:0!important;top:0!important;width:100%!important;height:100%!important;object-fit:contain!important;image-rendering:auto!important}',
@@ -1102,6 +1130,31 @@ var __AppPanel = {
 		ta.focus();
 		ta.select();
 	},
+	// 记住/还原被我们改过内联样式的元素。
+	// 为什么需要：PiP 期间为了"留在渲染树里继续解码"，会把真实的 <video>
+	// 停到屏幕外（1×1、left:-10000px），站点还可能中途换掉源元素、我们再接管
+	// 新的那个。关窗时如果只还原"当初记录的那个"，被接管的新元素就会一直停在
+	// 停放样式上 —— 页面播放器一片黑，就是"主窗口没恢复"。
+	_rememberStyle: function (el) {
+		if (!el || !el.style) return;
+		if (!this._styledEls) this._styledEls = [];
+		for (var i = 0; i < this._styledEls.length; i++) {
+			if (this._styledEls[i].el === el) return;
+		}
+		this._styledEls.push({ el: el, css: el.getAttribute('style') || '' });
+	},
+	_restoreStyles: function () {
+		var list = this._styledEls || [];
+		this._styledEls = [];
+		for (var i = 0; i < list.length; i++) {
+			try {
+				var it = list[i];
+				if (!it || !it.el) continue;
+				if (it.css) it.el.setAttribute('style', it.css);
+				else it.el.removeAttribute('style');
+			} catch (e) { }
+		}
+	},
 	// PiP 窗口关闭后，把搬走的节点放回原处。
 	_restorePip: function () {
 		this._stopWatchdog();
@@ -1114,6 +1167,9 @@ var __AppPanel = {
 		this._pipView = null;
 		this._lastFrames = null;
 		this._restorePipNode();
+		// 接管过程中被我们改过样式的元素（含站点中途换掉的源视频）全部还原，
+		// 否则页面里的 <video> 还停在 1×1、屏幕外的停放样式上，播放器是黑的。
+		this._restoreStyles();
 		this._pipStack = [];
 		this._pipPanel = null;
 		this._hostNatural = null;
@@ -1121,6 +1177,16 @@ var __AppPanel = {
 		// 新的 PiP 文档需要重新补样式
 		this._pipStyleKeys = null;
 		this._pipWin = null;
+		// 回到主窗口：置顶窗口一关，浏览器不会自动把焦点还给原来的窗口，
+		// 用户就停在别的应用上，看起来"主窗口没恢复"。这里让后台把标签页
+		// 所在的窗口拉到前台（只要焦点，不改窗口状态）。立刻发一次，
+		// 500ms 后再补一次：关窗瞬间 Windows 正在切换前台窗口，一次不一定生效。
+		try {
+			use('__BgCmd').sendCmd('restoreWin', 'focus');
+			setTimeout(function () {
+				try { use('__BgCmd').sendCmd('restoreWin', 'focus'); } catch (e) { }
+			}, 500);
+		} catch (e) { }
 		// 丢掉 PiP 工具栏按钮的引用，避免后续书签状态
 		// 更新碰到已经脱离文档的节点。
 		use('ButtonPanel').btn_bkm = {};

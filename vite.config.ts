@@ -68,6 +68,9 @@ const EXPLICIT_RESERVED = [
   'left', 'top', 'width', 'height', 'type', 'incognito',
   // chrome.tabs.query / windows.getAll 的查询条件（弹窗里用到）
   'active', 'currentWindow', 'lastFocusedWindow', 'highlighted', 'pinned', 'audible', 'selected', 'discarded', 'mutedInfo',
+  // windows.getAll({ windowTypes: [...] })：这几个字面量键只在调用处出现一次，
+  // 被改名后 Chrome 会直接抛 "Unexpected property: 'N'"（另一台设备上就是这样崩的）。
+  'windowTypes', 'populate', 'windowState',
   // 自动化冒烟测试用的诊断钩子
   '__sepWin', 'start', 'stop', 'setMode', 'applyBody', 'saveAreaSize', 'savedSize', 'fitWhole', 'wholeState', 'hasPip', 'targetTag', 'scale', 'zoom', 'pipStats', 'mirrorOn', 'frames', 'fps', 'kind', 'idleMs', 'rafAge', 'srcFrames', 'mp', 'calls', 'dirty', 'err', 'restarts', 'mirrored', 'requested',
   // pipStats() 的诊断字段（自动化脚本按名字读）
@@ -164,15 +167,33 @@ async function postProcess(file: string, reserved: string[], mode: BuildMode): P
   let out;
   if (mode === 'obf') {
     const JavaScriptObfuscator = require('javascript-obfuscator');
-    out = JavaScriptObfuscator.obfuscate(code, {
+    // 先做与 min 构建完全一致的压缩（属性改名 + 保留名单），
+    // 再交给混淆器做"变量改名"级别的处理。
+    //
+    // 为什么要先压缩：直接拿未压缩代码去混淆时，混淆器的 stringArray
+    // （把字符串常量搬进数组、用查表函数替换）会把 `self.xxx()` 这类调用
+    // 变成 `self[_0x172581(...)]()`，实测在内容脚本里查表函数拿不到，
+    // 于是 `self._suppressForeignVideos is not a function`、
+    // `.scrollHeight` of undefined 这类错误接连出现（另一台设备上就是这样崩的）。
+    const minified = await terserMinify(code, {
+      ecma: 2020,
+      compress: { passes: 2 },
+      // 属性改名**关闭**：Chrome 扩展要和 chrome.* 的参数对象、跨上下文协议字段
+      // 对齐，只要漏掉一个名字（比如 windows.getAll 的 windowTypes）就会变成
+      // "Unexpected property: 'N'" 这种只在特定设备/路径上炸的错误。
+      // 实测只省 14.7% 体积（109.7→125.8 KB），不值得用稳定性去换。
+      mangle: { toplevel: false },
+      format: { comments: false },
+    });
+    out = JavaScriptObfuscator.obfuscate(minified.code ?? '', {
       target: 'browser',
       compact: true,
-      stringArray: true,
-      stringArrayThreshold: 0.75,
-      stringArrayRotate: true,
-      stringArrayShuffle: true,
-      stringArrayWrappersCount: 2,
-      stringArrayWrappersType: 'function',
+      // stringArray 系全部关闭：它会生成查表函数，跨 world/内容脚本里不可靠
+      stringArray: false,
+      stringArrayThreshold: 0,
+      stringArrayRotate: false,
+      stringArrayShuffle: false,
+      stringArrayWrappersCount: 0,
       splitStrings: false,
       // 下面这些会生成 eval / new Function，MV3 的 CSP 直接拒绝，必须保持关闭
       selfDefending: false,
@@ -188,7 +209,11 @@ async function postProcess(file: string, reserved: string[], mode: BuildMode): P
     const res = await terserMinify(code, {
       ecma: 2020,
       compress: { passes: 2 },
-      mangle: { toplevel: false, properties: { reserved } },
+      // 属性改名**关闭**：Chrome 扩展要和 chrome.* 的参数对象、跨上下文协议字段
+      // 对齐，只要漏掉一个名字（比如 windows.getAll 的 windowTypes）就会变成
+      // "Unexpected property: 'N'" 这种只在特定设备/路径上炸的错误。
+      // 实测只省 14.7% 体积（109.7→125.8 KB），不值得用稳定性去换。
+      mangle: { toplevel: false },
       format: { comments: false },
     });
     out = res.code;
@@ -210,7 +235,7 @@ async function postProcess(file: string, reserved: string[], mode: BuildMode): P
  * 变成 `'files'`（数组定义在同一个文件里，运行期仍然正确）。
  */
 const MUST_SURVIVE: Record<string, string[]> = {
-  'background.js': ['files', 'world', 'cmd', 'arg', 'selector', 'size'],
+  'background.js': ['files', 'world', 'cmd', 'arg', 'selector', 'size', 'windowTypes'],
   'content.js': ['cmd', 'arg', 'selector', 'size'],
 };
 

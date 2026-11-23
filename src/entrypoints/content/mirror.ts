@@ -55,6 +55,8 @@ export class VideoMirror {
   /** 每帧看到的窗口尺寸（用来区分「还在拖」和「已经停下」）。 */
   private lastSeenW = -1;
   private lastSeenH = -1;
+  /** 上次真正重建后备缓冲的时间（拖动过程中用它把重建限流到每 100ms 一次）。 */
+  private lastResizeAt = 0;
   private fpsWindowStart = 0;
   private fpsWindowCount = 0;
 
@@ -207,23 +209,27 @@ export class VideoMirror {
       this.lastSeenH = winH;
       this.computeTargetSize();
       this.resizeCanvas();
+      this.lastResizeAt = now;
       return this.drawFrame(ctx, video);
     }
     // 拖动窗口时尺寸每帧都在变。每帧都改 canvas.width/height，等于每帧重建
-    // 一次后备缓冲（GPU 重新分配 + 内容作废），拖动会明显卡；所以只记下尺寸，
-    // 等它**稳定 120ms** 后再一次性重算。这期间画布按 CSS 等比缩放，
-    // 视觉上只是短暂略软。
+    // 一次后备缓冲（GPU 重新分配 + 内容作废），拖动会明显卡；但只"等停下再算"
+    // 又会出现"松手后画面还糊一会儿"。折中成两条：
+    //   ① 拖动过程中最多每 100ms 重建一次（持续拖动时也能很快变清晰）；
+    //   ② 尺寸一停（24ms≈3 帧没再变）立刻重建，松手瞬间就该是清晰的。
     if (winW !== this.lastSeenW || winH !== this.lastSeenH) {
       this.lastSeenW = winW;
       this.lastSeenH = winH;
       this.pendingW = winW;
       this.pendingH = winH;
       this.lastSizeChangeAt = now;
-    } else if (this.pendingW && now - this.lastSizeChangeAt > 120) {
+    }
+    if (this.pendingW && (now - this.lastResizeAt >= 100 || now - this.lastSizeChangeAt >= 24)) {
       this.pendingW = 0;
       this.pendingH = 0;
       this.computeTargetSize();
       this.resizeCanvas();
+      this.lastResizeAt = now;
     }
     return this.drawFrame(ctx, video);
   }

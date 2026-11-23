@@ -430,6 +430,33 @@ var cmdFromTab = {
 		Panel.updateWin(tab.windowId, { focused: false });
 	},
 	restoreWin: function (arg, tab) {
+		// arg === 'focus'：只把窗口拉到前台，**不改**窗口状态。
+		// 置顶的 PiP 窗口关闭后用它把主窗口带回前台；带 state:'normal' 的话
+		// 会把用户最大化的窗口缩回普通尺寸。
+		if (arg === 'focus') {
+			chrome.windows.get(tab.windowId, function (win) {
+				if (chrome.runtime.lastError || !win) return;
+				var wantState = win.state;
+				// 先聚焦。Windows 上聚焦会把最大化窗口恢复成 normal，
+				// 所以聚焦完成后再把原来的状态补回来（隔一拍，紧挨着会被吞掉）。
+				chrome.windows.update(tab.windowId, { focused: true }, function () {
+					if (chrome.runtime.lastError) return;
+					var restore = '';
+					if (wantState === 'maximized' || wantState === 'fullscreen' || wantState === 'locked-fullscreen') {
+						restore = wantState;
+					} else if (wantState === 'minimized') {
+						restore = 'normal';
+					}
+					if (!restore) return;
+					setTimeout(function () {
+						chrome.windows.update(tab.windowId, { state: restore }, function () {
+							void chrome.runtime.lastError;
+						});
+					}, 150);
+				});
+			});
+			return;
+		}
 		Panel.updateWin(tab.windowId, { focused: true, state: 'normal' });
 	},
 	saveProp: function (arg, tab) {
