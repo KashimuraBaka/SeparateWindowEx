@@ -780,6 +780,8 @@ var __AppPanel = {
 		this._pipVideo = video;
 		this._pipView = view;
 		this._startMirror(video, view);
+		// 键盘/鼠标事件桥：站点挂在页面 document 上的监听器也要能收到 PiP 里的输入
+		this._mirrorPipInput(true);
 		// 选区域的那次点击会把正在播的视频点成暂停（B 站的行为）。
 		// 只在"选之前本来在播"的情况下补一次 play()；之后用户自己暂停不再被碰。
 		if (this._wasPlaying && video.paused) {
@@ -794,6 +796,26 @@ var __AppPanel = {
 		setTimeout(function () { self._suppressForeignVideos(); }, 400);
 		setTimeout(function () { self._suppressForeignVideos(); }, 1500);
 		this._startWatchdog();
+	},
+	// 让站点的输入监听器也监听 PiP 文档（实现见 core/gate.ts）。
+	//
+	// 播放器节点被搬进 PiP 之后，它自身的事件照常工作，但键盘快捷键、
+	// 进度条拖动的 mousemove/mouseup 都注册在页面 document 上 —— 那些监听器
+	// 在页面文档里，永远收不到 PiP 文档里的事件。所以这里让闸门把同一批
+	// 监听器在 PiP 文档上再挂一份：事件仍是原生派发，target/offsetX 都正确。
+	_mirrorPipInput: function (on) {
+		var fire = function () {
+			try {
+				// bubbles:true —— 闸门的监听器挂在 window 上，不冒泡就收不到
+				document.dispatchEvent(new CustomEvent(on ? '__sepwin-mirror-input-on' : '__sepwin-mirror-input-off', { bubbles: true }));
+			} catch (e) { }
+		};
+		fire();
+		if (!on) return;
+		// 闸门由后台异步注入（弹出后才装），可能比这里晚：补几次
+		setTimeout(fire, 200);
+		setTimeout(fire, 800);
+		setTimeout(fire, 2000);
 	},
 	// 把抓取区域的宽高设为 PiP 窗口的宽高（不做缩放），
 	// 让页面的响应式布局在窗口中重排，
@@ -1199,6 +1221,7 @@ var __AppPanel = {
 	},
 	// PiP 窗口关闭后，把搬走的节点放回原处。
 	_restorePip: function () {
+		this._mirrorPipInput(false);
 		this._stopWatchdog();
 		this._stopMirror();
 		this._releaseWakeLock();

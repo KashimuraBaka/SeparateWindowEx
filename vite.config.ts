@@ -44,6 +44,8 @@ const OUTPUTS: Array<{ name: string; entry: string; kind: OutputKind }> = [
   // 页面主世界的可见性闸门：成对注入（装上 / 拆掉），见 entrypoints/injected/gateOn.ts
   { name: 'gateOn', entry: 'entrypoints/injected/gateOn.ts', kind: 'bundle' },
   { name: 'gateOff', entry: 'entrypoints/injected/gateOff.ts', kind: 'bundle' },
+  // document_start 就在主世界记录站点的输入监听器（供 PiP 镜像用），见 injected/recorder.ts
+  { name: 'recorder', entry: 'entrypoints/injected/recorder.ts', kind: 'bundle' },
 ];
 
 // 属性改名必须避开的名称：一是跨文件/跨上下文的协议字段（消息封装、chrome.* 参数、

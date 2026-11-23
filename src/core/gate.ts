@@ -34,6 +34,14 @@ export interface GateStats {
 	hidden: boolean;
 	/** 被拦下的“非用户”暂停次数（诊断用）。 */
 	blockedPauses?: number;
+	/** 是否已经把站点的输入监听器镜像到 PiP 文档（诊断用）。 */
+	mirroring?: boolean;
+	/** 是否已设置镜像目标窗口（诊断用）。 */
+	mirrorWin?: boolean;
+	/** 已记录的输入监听器条数（诊断用）。 */
+	regs?: number;
+	/** 从 document_start 记录器读到的条数（诊断用）。 */
+	recorded?: number;
 }
 
 export function sepWinEventGate(on: boolean): string {
@@ -78,6 +86,19 @@ export function sepWinEventGate(on: boolean): string {
 		allowPauseUntil: 0,
 		origPause: null as any,
 		pauseWrapped: false,
+		/* 从记录器读到的监听器条数（诊断用） */
+		recorded: 0,
+		/* ---- 输入镜像 ---- */
+		/* document/window 上注册过的输入类监听器（用于在 PiP 文档里再挂一份） */
+		regs: [] as any[],
+		/* 已镜像到 PiP 文档的条目 */
+		mirrored: [] as any[],
+		/* 当前镜像目标（PiP 窗口），null = 未开启 */
+		mirrorWin: null as any,
+		origDocAdd: null as any,
+		origDocRemove: null as any,
+		origWinAdd: null as any,
+		origWinRemove: null as any,
 	};
 
 	/* 真实可见性：始终走改动前保存的 getter，绕开我们自己写的假值。 */
@@ -300,6 +321,111 @@ export function sepWinEventGate(on: boolean): string {
 			try { Object.defineProperty(docProto, st.descs[i][0], st.descs[i][1]); } catch (e) { }
 		}
 		st.descs = [];
+		/* 收起输入镜像：PiP 文档里那批替身监听器要一并摘掉。 */
+		unmirrorInput();
+	}
+
+	/* 需要镜像到 PiP 文档的输入类事件（可见性那几类由闸门自己处理，不在此列）。 */
+	const INPUT_TYPES = ['keydown', 'keyup', 'keypress', 'mousedown', 'mousemove', 'mouseup',
+		'click', 'dblclick', 'wheel', 'pointerdown', 'pointermove', 'pointerup', 'pointercancel',
+		'contextmenu', 'touchstart', 'touchmove', 'touchend'];
+
+	function isInputType(type: string): boolean {
+		for (let i = 0; i < INPUT_TYPES.length; i++) if (INPUT_TYPES[i] === type) return true;
+		return false;
+	}
+
+	function mirrorOwner(reg: any): any {
+		const win = st.mirrorWin;
+		if (!win || !win.document) return null;
+		return reg.target === 'window' ? win : win.document;
+	}
+
+	/* 把一条注册照搬到 PiP 文档/窗口上，事件仍是原生派发（target/offsetX 都对）。 */
+	function attachMirror(reg: any): void {
+		if (!st.mirrorWin) return;
+		for (let i = 0; i < st.mirrored.length; i++) {
+			if (st.mirrored[i].reg === reg) return;
+		}
+		const target = mirrorOwner(reg);
+		if (!target) return;
+		const wrapped = function (e: any) {
+			try {
+				const fn = reg.listener;
+				if (typeof fn === 'function') fn.call(target, e);
+				else if (fn && typeof fn.handleEvent === 'function') fn.handleEvent(e);
+			} catch (err) { }
+		};
+		try {
+			target.addEventListener(reg.type, wrapped, reg.options);
+			st.mirrored.push({ reg: reg, target: target, wrapped: wrapped });
+		} catch (err) { }
+	}
+
+	function unmirrorInput(): void {
+		for (let i = 0; i < st.mirrored.length; i++) {
+			const m = st.mirrored[i];
+			try { m.target.removeEventListener(m.reg.type, m.wrapped, m.reg.options); } catch (e) { }
+		}
+		st.mirrored = [];
+		st.mirrorWin = null;
+	}
+
+	/* 拦一层 add/removeEventListener，把输入类监听器登记下来。 */
+	function installRegHook(): void {
+		if (st.origDocAdd) return;
+		try {
+			const docP: any = (host as any).Document && (host as any).Document.prototype;
+			const winP: any = (host as any).Window && (host as any).Window.prototype;
+			if (docP) {
+				st.origDocAdd = docP.addEventListener;
+				st.origDocRemove = docP.removeEventListener;
+				docP.addEventListener = function (type: any, listener: any, options: any) {
+					try {
+						const t = String(type);
+						if (isInputType(t) && listener) {
+							const reg = { target: 'document', type: t, listener: listener, options: options };
+							st.regs.push(reg);
+							if (st.mirrorWin) attachMirror(reg);
+						}
+					} catch (e) { }
+					return st.origDocAdd.call(this, type, listener, options);
+				};
+				docP.removeEventListener = function (type: any, listener: any, options: any) {
+					try {
+						const t = String(type);
+						for (let i = st.regs.length - 1; i >= 0; i--) {
+							if (st.regs[i].target === 'document' && st.regs[i].type === t && st.regs[i].listener === listener) st.regs.splice(i, 1);
+						}
+					} catch (e) { }
+					return st.origDocRemove.call(this, type, listener, options);
+				};
+			}
+			if (winP) {
+				st.origWinAdd = winP.addEventListener;
+				st.origWinRemove = winP.removeEventListener;
+				winP.addEventListener = function (type: any, listener: any, options: any) {
+					try {
+						const t = String(type);
+						if (isInputType(t) && listener) {
+							const reg = { target: 'window', type: t, listener: listener, options: options };
+							st.regs.push(reg);
+							if (st.mirrorWin) attachMirror(reg);
+						}
+					} catch (e) { }
+					return st.origWinAdd.call(this, type, listener, options);
+				};
+				winP.removeEventListener = function (type: any, listener: any, options: any) {
+					try {
+						const t = String(type);
+						for (let i = st.regs.length - 1; i >= 0; i--) {
+							if (st.regs[i].target === 'window' && st.regs[i].type === t && st.regs[i].listener === listener) st.regs.splice(i, 1);
+						}
+					} catch (e) { }
+					return st.origWinRemove.call(this, type, listener, options);
+				};
+			}
+		} catch (e) { }
 	}
 
 	const api: any = {
@@ -307,12 +433,53 @@ export function sepWinEventGate(on: boolean): string {
 			if (value) enable();
 			else disable();
 		},
+		/* 把"挂在页面 document/window 上的输入类监听器"同时挂到 PiP 文档上。
+		 *
+		 * 站点把播放器节点搬走后，节点自身的事件照常工作，但它的键盘快捷键、
+		 * 进度条拖动的 mousemove/mouseup 都注册在页面 document 上 ——
+		 * 那些监听器在页面文档里，永远收不到 PiP 文档里发生的事件。
+		 * 之前试过"把事件复制一份派发到页面 document"，但站点是用
+		 * offsetX（相对事件目标）算位置的，复制品的 target 变成 document，
+		 * 只能算出 0，拖动看起来毫无反应。
+		 *
+		 * 这里换成让同一个监听器**也在 PiP 文档里跑**：事件是原生派发的，
+		 * target/offsetX 全都正确。传入 PiP 窗口即开启，传 null 关闭。 */
+		mirrorInput: function (pipWin: any): void {
+			unmirrorInput();
+			if (!pipWin || !pipWin.document) return;
+			st.mirrorWin = pipWin;
+			installRegHook();
+			/* 先用 document_start 就装在主世界的记录器（injected/recorder.ts）
+			   补上页面加载时注册的那批监听器 —— 闸门是弹出时才注入的，
+			   站点真正的播放器监听器全都比它早。 */
+			try {
+				const rec = (host as any).__sepWinInputRegs && (host as any).__sepWinInputRegs.regs;
+				st.recorded = rec ? rec.length : 0;
+				if (rec) for (let i = 0; i < rec.length; i++) attachMirror(rec[i]);
+			} catch (e) { }
+			for (let i = 0; i < st.regs.length; i++) attachMirror(st.regs[i]);
+		},
+		/* 把同一批监听器再挂到 PiP 文档上。 */
+		_mirrorAll: function (): void { /* 内部使用，保留占位 */ },
 		/* 给自动化验证用的只读快照。 */
 		stats: function (): GateStats {
-			return { on: st.on, pumping: st.pumping, pending: st.queue.size, hidden: trueHidden(), blockedPauses: st.blockedPauses | 0 };
+			return { on: st.on, pumping: st.pumping, pending: st.queue.size, hidden: trueHidden(), blockedPauses: st.blockedPauses | 0, mirroring: !!(st.mirrorWin && st.mirrored.length), mirrorWin: !!st.mirrorWin, regs: st.regs.length, recorded: st.recorded | 0 };
 		},
 	};
 	host[KEY] = api;
+	/* 内容脚本用 DOM 事件通知开关（postMessage 的 data 不能跨世界传递，
+	   而 DOM 事件在隔离世界/主世界之间是同一套派发）。 */
+	try {
+		const onMirror = function () {
+			try {
+				const dpp = (host as any).documentPictureInPicture;
+				api.mirrorInput(dpp && dpp.window);
+			} catch (err) { }
+		};
+		const offMirror = function () { try { api.mirrorInput(null); } catch (err) { } };
+		host.addEventListener('__sepwin-mirror-input-on', onMirror, false);
+		host.addEventListener('__sepwin-mirror-input-off', offMirror, false);
+	} catch (e) { }
 	enable();
 	return 'installed';
 }
