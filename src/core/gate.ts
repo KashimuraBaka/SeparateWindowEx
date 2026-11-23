@@ -32,6 +32,8 @@ export interface GateStats {
 	pumping: boolean;
 	pending: number;
 	hidden: boolean;
+	/** 被拦下的“非用户”暂停次数（诊断用）。 */
+	blockedPauses?: number;
 }
 
 export function sepWinEventGate(on: boolean): string {
@@ -49,6 +51,8 @@ export function sepWinEventGate(on: boolean): string {
 	const EVENT_TYPES = ['visibilitychange', 'webkitvisibilitychange', 'mozvisibilitychange', 'freeze', 'resume'];
 	/* 自己发号的起点：原生 rAF id 是小整数，错开才不会互相取消。 */
 	const ID_BASE = 10000000;
+	/* 内容脚本在"用户刚在 PiP 里操作过"时派发这个事件，用来放行用户自己的暂停。 */
+	const ALLOW_PAUSE_EVENT = '__sepwin-allow-pause';
 
 	const docProto: any = Document.prototype;
 	/* 改动前先留好原件，之后既用来读真实状态，也用来还原。 */
@@ -68,6 +72,12 @@ export function sepWinEventGate(on: boolean): string {
 		frameId: 0,
 		timerId: 0,
 		pollId: 0,
+		/* 被拦下的暂停次数（诊断用） */
+		blockedPauses: 0,
+		/* 用户主动暂停的放行窗口：内容脚本在 PiP 内有点击/按键时把它往后推 3 秒 */
+		allowPauseUntil: 0,
+		origPause: null as any,
+		pauseWrapped: false,
 	};
 
 	/* 真实可见性：始终走改动前保存的 getter，绕开我们自己写的假值。 */
@@ -234,6 +244,30 @@ export function sepWinEventGate(on: boolean): string {
 			host.requestAnimationFrame = rafWrap;
 			host.cancelAnimationFrame = cafWrap;
 		} catch (e) { }
+		/* 4) 拦截"非用户发起"的暂停（页面主世界）。
+		   PiP 期间站点/浏览器会以"页面不可见"为由调用 <video>.pause()，
+		   表现就是"在 PiP 里暂停后又被拉回播放"或"暂停不生效"。
+		   这里把 pause() 拦掉：只有用户刚在 PiP 里操作过（内容脚本派发放行事件）
+		   的那 3 秒内才真正放行 —— 那才是用户自己的暂停。 */
+		try {
+			const mediaProto: any = (host as any).HTMLMediaElement && (host as any).HTMLMediaElement.prototype;
+			if (mediaProto && !st.pauseWrapped) {
+				st.origPause = mediaProto.pause;
+				mediaProto.pause = function (this: any) {
+					try {
+						if (st.on && Date.now() >= st.allowPauseUntil) {
+							st.blockedPauses += 1;
+							return;
+						}
+					} catch (e) { }
+					return st.origPause.apply(this, arguments as any);
+				};
+				st.pauseWrapped = true;
+			}
+			host.addEventListener(ALLOW_PAUSE_EVENT, function () {
+				st.allowPauseUntil = Date.now() + 3000;
+			}, true);
+		} catch (e) { }
 		/* 不伴随事件的可见性变化（最小化窗口、切走标签页）用轮询兜底。 */
 		st.pollId = setInterval(refresh, 250);
 		refresh();
@@ -253,6 +287,15 @@ export function sepWinEventGate(on: boolean): string {
 			host.cancelAnimationFrame = st.nativeCaf;
 		} catch (e) { }
 		if (st.pollId) { clearInterval(st.pollId); st.pollId = 0; }
+		/* 还原 pause()：闸门关掉之后站点要能正常暂停。 */
+		try {
+			const mediaProto: any = (host as any).HTMLMediaElement && (host as any).HTMLMediaElement.prototype;
+			if (mediaProto && st.pauseWrapped && st.origPause) {
+				mediaProto.pause = st.origPause;
+				st.pauseWrapped = false;
+				st.origPause = null;
+			}
+		} catch (e) { }
 		for (let i = 0; i < st.descs.length; i++) {
 			try { Object.defineProperty(docProto, st.descs[i][0], st.descs[i][1]); } catch (e) { }
 		}
@@ -266,7 +309,7 @@ export function sepWinEventGate(on: boolean): string {
 		},
 		/* 给自动化验证用的只读快照。 */
 		stats: function (): GateStats {
-			return { on: st.on, pumping: st.pumping, pending: st.queue.size, hidden: trueHidden() };
+			return { on: st.on, pumping: st.pumping, pending: st.queue.size, hidden: trueHidden(), blockedPauses: st.blockedPauses | 0 };
 		},
 	};
 	host[KEY] = api;

@@ -35,6 +35,21 @@ var __AppPanel = {
 	_prepare: function (target) {
 		use('Selector').href = document.location.href;
 		this.selector = use('Selector').getSelector(target);
+		// 这次弹出是为哪块区域开的。上一级/下一级只改变**显示**的节点，
+		// 保存尺寸始终落回这块区域（“当前区域”），不会因为浏览层级而跑到
+		// 父级/子级的选择器上、把尺寸存到一个看不见的槽位里。
+		this._areaSelector = this.selector;
+		// 记下"选这块区域之前视频是不是在播"。
+		// 选区域的那次点击会落到站点播放器上（B 站点击视频 = 暂停），
+		// 弹出后画面就停住了；这里记下来，弹出后只在"本来是播着的"情况下补一次
+		// play()，之后用户自己暂停就不会再被碰（暂停源头由 gate.ts 拦截）。
+		this._wasPlaying = false;
+		try {
+			var vids = document.querySelectorAll('video');
+			for (var i = 0; i < vids.length; i++) {
+				if (!vids[i].paused && vids[i].readyState > 2) { this._wasPlaying = true; break; }
+			}
+		} catch (e) { }
 		this.stop();
 		this.dellIcon();
 		use('__Element').switchOff();
@@ -431,7 +446,7 @@ var __AppPanel = {
 	_startWatchdog: function () {
 		var self = this;
 		this._stopWatchdog();
-		var lastFrames = -1, lastResume = 0;
+		var lastFrames = -1;
 		var lastSrcFrames = -1, lastSrcMove = Date.now(), lastNudge = 0, sawSrcFrames = false;
 		self._heals = 0;
 
@@ -454,14 +469,10 @@ var __AppPanel = {
 			self._suppressForeignVideos();
 			// 站点会持续注入样式（播放器/弹幕），每轮补差
 			try { self._copyPageStyles(); } catch (e) { }
-			// a) 保持源视频解码（Chrome 可能暂停隐藏标签页的媒体）
-			try {
-				if (video.paused && !video.ended && now - lastResume > 10000) {
-					lastResume = now;
-					var p = video.play();
-					if (p && p.catch) p.catch(function () { });
-				}
-			} catch (e) { }
+			// a) 暂停交给“拦截”处理，这里不再强行 play()。
+			//    站点/浏览器以“页面不可见”为由调 pause() 会被主世界的闸门
+			//    （core/gate.ts）直接拦掉；用户自己的暂停会放行。
+			//    事后强行续播会破坏用户操作（暂停后又被拉回播放），所以删掉。
 			// a2) 站点把源元素换掉了（断流重连、切换播放器）：我们的引用已经脱离文档，
 			//     画面会一直停在最后一帧，而新元素照旧发声。接管页面上还在播的那个。
 			if (!video.isConnected) {
@@ -551,6 +562,18 @@ var __AppPanel = {
 
 		this._showNode(target);
 		this._addPipPanel(pipWin);
+		// 用户在 PiP 里点击/按键时，通知页面主世界的闸门：
+		// 接下来 3 秒内的 pause() 是用户自己的，不要拦
+		// （其余暂停一律拦掉，见 core/gate.ts）。
+		try {
+			var markInput = function () {
+				try {
+					window.dispatchEvent(new CustomEvent('__sepwin-allow-pause'));
+				} catch (e) { }
+			};
+			pipWin.addEventListener('pointerdown', markInput, true);
+			pipWin.addEventListener('keydown', markInput, true);
+		} catch (e) { }
 
 
 		// PiP 窗口存在期间保持屏幕唤醒、源标签页存活。
@@ -721,10 +744,6 @@ var __AppPanel = {
 		// 内联样式，因此站点自己的响应式 CSS 会像对待真实
 		// 元素一样，按 PiP 窗口尺寸调整它。
 		this._pipHost = host;
-		// 在**搬动之前**量下宿主的原始尺寸：搬进 PiP 之后它的布局宽度会塌掉
-		// （实测 668→31px），拿塌掉的尺寸算缩放会把画面压成一条。
-		var naturalRect = host.getBoundingClientRect();
-		this._hostNatural = { w: Math.round(naturalRect.width) || 0, h: Math.round(naturalRect.height) || 0 };
 		// 快照内联样式，关闭时把页面精确还原。
 		this._pipHostCss = host.getAttribute('style');
 		if (!host.style.position || host.style.position === 'static') {
@@ -750,6 +769,10 @@ var __AppPanel = {
 			target: host, parent: host.parentNode, next: host.nextSibling,
 			selector: use('Selector').getSelector(host), mirrored: true
 		};
+		// 在页面里留一块**同尺寸占位**。
+		// 直接把宿主搬走，页面就塌出一个空洞（站点还可能在那里重建一个黑色播放器），
+		// 表现为"弹出后原本元素占位没了/变成一个黑框、下面内容整体上移"。
+		// 占位块保持原有尺寸，布局不跳；点它可以把区域收回来。
 		// 区域进入 PiP 文档后失去了页面的布局上下文，
 		// 于是给它 PiP 窗口的盒子，让站点 CSS 在此重新排版。
 		wrap.appendChild(host);
@@ -757,6 +780,14 @@ var __AppPanel = {
 		this._pipVideo = video;
 		this._pipView = view;
 		this._startMirror(video, view);
+		// 选区域的那次点击会把正在播的视频点成暂停（B 站的行为）。
+		// 只在"选之前本来在播"的情况下补一次 play()；之后用户自己暂停不再被碰。
+		if (this._wasPlaying && video.paused) {
+			try {
+				var pr = video.play();
+				if (pr && pr.catch) pr.catch(function () { });
+			} catch (e) { }
+		}
 		// 站点会在 <video> 离开页面后重建播放器；
 		// 这些替代品一出现就隐藏。
 		this._suppressForeignVideos();
@@ -946,7 +977,7 @@ var __AppPanel = {
 		if (canUp) { up.classList.remove('disable'); } else { up.classList.add('disable'); }
 		if (canDown) { dwn.classList.remove('disable'); } else { dwn.classList.add('disable'); }
 
-		var saved = !!this._sizes[this.selector || st.selector];
+		var saved = !!this._sizes[this._areaSelector || this.selector || st.selector];
 		save.classList.remove(saved ? 'btn_save_off' : 'btn_save_on');
 		save.classList.add(saved ? 'btn_save_on' : 'btn_save_off');
 		save.setAttribute('title',
@@ -959,10 +990,10 @@ var __AppPanel = {
 		var st = this._pip;
 		if (!st || !this._pipWin) return;
 		var sel = st.selector;
-		// 键必须和 _openDocPip 查的是同一个：那边用 this.selector（点选的目标），
-		// st.selector 是搬进去的容器（点视频时是播放器 div）。两者不一致时
-		// 存了也永远查不到 —— 表现就是"存了尺寸，再打开还是原来大小"。
-		sel = this.selector || sel;
+		// 键必须和 _openDocPip 查的是同一个。用 _areaSelector（这次弹出对应的区域）：
+		// 上一级/下一级之后 this.selector 会变成父级/子级的选择器，若拿它当键，
+		// 保存就会存到另一个槽位上 —— 表现正是"上下级切换后保存，当前区域没变"。
+		sel = this._areaSelector || this.selector || sel;
 		var win = this._pipWin;
 		if (this._sizes[sel]) {
 			delete this._sizes[sel];
@@ -991,15 +1022,23 @@ var __AppPanel = {
 		}
 		this._updatePipState();
 	},
-	// 上一级/下一级换了区域：只把"当前区域"同步给面板，浏览层级本身不写存储。
+	// 上一级/下一级换了区域：这一层就是"当前区域"。
 	//
-	// 以前在这里改名/搬几何，用户的区域会被换成父级甚至整页 ——
-	// 之后点站点图标弹出来的就不是原来那块了。现在保存只在用户按尺子时发生，
-	// 而且只写"当前这一层"自己的记录。
+	// 之前这里刻意不写存储，结果用户翻到上一层/下一层后，下次点图标打开的
+	// 还是原来那一层 —— 明明面板上显示的就是新层级。现在和经典窗口的
+	// saveSelector 保持一致：把站点记录里的这条区域改名成新选择器。
 	_followArea: function (previous) {
 		var current = this._pip && this._pip.selector;
 		if (!current || !previous || current === previous || current === 'BODY') return;
 		this.selector = current;
+		// 区域身份跟着走：之后保存尺寸、面板"已保存"状态都按新层级算
+		this._areaSelector = current;
+		if (this._sizes[previous]) {
+			this._sizes[current] = this._sizes[previous];
+			delete this._sizes[previous];
+		}
+		// 站点记录改名：下次打开就是这一层
+		use('__BgCmd').sendCmd('renameArea', { from: previous, to: current });
 		this._updatePipState();
 	},
 	// 显示父元素（经典窗口的"上一级"）。
@@ -1008,7 +1047,10 @@ var __AppPanel = {
 		if (!st) return;
 		var parent = st.parent;
 		if (!parent || parent === document.body || parent === document.documentElement) return;
-		var previous = st.selector;
+		// 用"区域"的选择器而不是 st.selector：点视频时 st.selector 是播放器容器
+		// （DIV.bpx-player-video-area），而站点记录里登记的是点击的那块（VIDEO）。
+		// 拿容器去改名会找不到槽位，存储看起来毫无变化。
+		var previous = this._areaSelector || st.selector;
 		this._pipStack.push(st.target);
 		this._showNode(parent);
 		this._followArea(previous);
@@ -1016,7 +1058,7 @@ var __AppPanel = {
 	// 回到之前显示的子元素（经典窗口的"下一级"）。
 	_pipNavDown: function () {
 		if (!this._pipStack || !this._pipStack.length) return;
-		var previous = this._pip ? this._pip.selector : '';
+		var previous = this._areaSelector || (this._pip ? this._pip.selector : '');
 		this._showNode(this._pipStack.pop());
 		this._followArea(previous);
 	},
@@ -1172,7 +1214,6 @@ var __AppPanel = {
 		this._restoreStyles();
 		this._pipStack = [];
 		this._pipPanel = null;
-		this._hostNatural = null;
 		this._hostScale = 1;
 		// 新的 PiP 文档需要重新补样式
 		this._pipStyleKeys = null;

@@ -513,6 +513,32 @@ var cmdFromTab = {
 			});
 		});
 	},
+	// 上一级/下一级换了层级之后，把站点记录里的**这一条区域**改名成新选择器，
+	// 这样下次点图标打开的就是刚才浏览到的那一层（与经典窗口的 saveSelector 一致）。
+	// 只动 from 对应的那一条；如果新选择器已经登记过，就合并到它、把旧的一条删掉。
+	renameArea: function (arg, tab) {
+		if (!arg || !arg.from || !arg.to || arg.from === arg.to) return;
+		if (arg.from === 'BODY' || arg.to === 'BODY') return;
+		Storage.getItems(tab.url, function (items) {
+			if (!items || !items.css) return;
+			var from = items.css.indexOf(arg.from);
+			if (from < 0) return;
+			var to = items.css.indexOf(arg.to);
+			if (to > -1 && to !== from) {
+				items.css.splice(from, 1);
+				if (items.icon) items.icon.splice(from, 1);
+				if (items.size) items.size.splice(from, 1);
+			} else {
+				items.css[from] = arg.to;
+			}
+			// setItems 不做归一化：必须给它站点键（normUrl），否则会写到
+			// "https://host/path" 这种另一个键上，原记录看起来毫无变化。
+			Storage.setItems(Storage.normUrl(tab.url), items);
+			try { newTabs.replace(tab.id, arg.to); } catch (e) { }
+			// 站点图标列表跟着刷新
+			cmdFromTab.getItems('', tab);
+		});
+	},
 	printScr: function (arg, tab) {
 		chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' }, function (srcUrl) {
 			SendMessage(tab.id, { cmd: 'saveImage', arg: { data: srcUrl } });
